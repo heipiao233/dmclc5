@@ -1,0 +1,7 @@
+{
+    "rust-analyzer.cargo.features": [
+        "components_installation",
+        "mod_loaders",
+        "content_services"
+    ]
+}

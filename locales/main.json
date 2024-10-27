@@ -1,0 +1,193 @@
+{
+    "_version": 2,
+    "dmclc": {
+        "en": "\"Dolphin\" Minecraft Launcher (Core)",
+        "zh_cn": "\"海豚\"《我的世界》启动器（核心）",
+        "zh_tw": "\"海豚\"《當個創世神》啟動器（核心）"
+    },
+    "accounts.uninitialized": {
+        "en": "Uninitialized",
+        "zh_cn": "未初始化",
+        "zh_tw": "未初始化"
+    },
+    "accounts.microsoft.name": {
+        "en": "Microsoft Account",
+        "zh_cn": "微软账号",
+        "zh_tw": "微軟帳號"
+    },
+    "accounts.microsoft.message": {
+        "en": "After pressing OK, please open %{url}. The code to be entered is %{code}.",
+        "zh_cn": "按确认后，请打开 %{url}，要输入的代码为 %{code}。",
+        "zh_tw": "按確認後，請打開 %{url}，要輸入的代碼爲 %{code}。"
+    },
+    "accounts.microsoft.no_minecraft_in_account": {
+        "en": "This account didn't buy Minecraft.",
+        "zh_cn": "该账户尚未购买 Minecraft。",
+        "zh_tw": "該帳戶尚未購買 Minecraft。"
+    },
+    "accounts.microsoft.timeout": {
+        "en": "Login timeout!",
+        "zh_cn": "登录超时！",
+        "zh_tw": "登錄超時！"
+    },
+    "accounts.microsoft.canceled": {
+        "en": "Login canceled!",
+        "zh_cn": "登录取消！",
+        "zh_tw": "登錄取消！"
+    },
+    "accounts.yggdrasil.username": {
+        "en": "E-Mail",
+        "zh_cn": "邮箱",
+        "zh_tw": "信箱"
+    },
+    "accounts.yggdrasil.password": {
+        "en": "Password",
+        "zh_cn": "密码",
+        "zh_tw": "密碼"
+    },
+    "accounts.yggdrasil.profileID": {
+        "en": "Profile ID",
+        "zh_cn": "角色 ID",
+        "zh_tw": "角色 ID"
+    },
+    "accounts.yggdrasil.wrong_email_or_password": {
+        "en": "Wrong E-Mail or password.",
+        "zh_cn": "错误的邮箱或密码。",
+        "zh_tw": "錯誤的信箱或密碼。"
+    },
+    "accounts.minecraft_universal_login.name": {
+        "en": "Minecraft Universal Login Account",
+        "zh_cn": "Minecraft 统一通行证",
+        "zh_tw": "Minecraft 統一通行證"
+    },
+    "accounts.minecraft_universal_login.serverID": {
+        "en": "Server ID",
+        "zh_cn": "服务器 ID",
+        "zh_tw": "伺服器 ID"
+    },
+    "accounts.authlib_injector.name": {
+        "en": "Authlib Injector",
+        "zh_cn": "外置登录",
+        "zh_tw": "外置登錄"
+    },
+    "accounts.authlib_injector.apiurl": {
+        "en": "Authentication Server URL",
+        "zh_cn": "认证服务器 URL",
+        "zh_tw": "認證伺服器 URL"
+    },
+    "accounts.offline.name": {
+        "en": "Offline Account",
+        "zh_cn": "离线登录",
+        "zh_tw": "離線登錄"
+    },
+    "accounts.offline.username": {
+        "en": "Username",
+        "zh_cn": "用户名",
+        "zh_tw": "使用者名稱"
+    },
+    "mod.id": {
+        "en": "Mod ID",
+        "zh_cn": "ID",
+        "zh_tw": "ID"
+    },
+    "mod.version": {
+        "en": "Version",
+        "zh_cn": "版本",
+        "zh_tw": "版本"
+    },
+    "mod.name": {
+        "en": "Name",
+        "zh_cn": "名称",
+        "zh_tw": "名稱"
+    },
+    "mod.description": {
+        "en": "Description",
+        "zh_cn": "描述",
+        "zh_tw": "描述"
+    },
+    "mod.license": {
+        "en": "License",
+        "zh_cn": "许可证",
+        "zh_tw": "許可證"
+    },
+    "mod.modpack.invalid": {
+        "en": "Invalid modpack file!",
+        "zh_cn": "无效整合包！",
+        "zh_tw": "無效整合包！"
+    },
+    "content_service.not_found": {
+        "en": "No such content service!",
+        "zh_cn": "无此内容服务！",
+        "zh_tw": "無此內容服務！"
+    },
+    "content_service.image_load_fail_detail": {
+        "en": "Failed to load image %{url}.",
+        "zh_cn": "图片 %{url} 加载失败。",
+        "zh_tw": "圖片 %{url} 載入失敗。"
+    },
+    "content_service.image_load_fail_title": {
+        "en": "Failed to load image!",
+        "zh_cn": "图片加载失败！",
+        "zh_tw": "圖片載入失敗！"
+    },
+    "loaders.minecraft_version_unknown": {
+        "en": "Minecraft version unknown.",
+        "zh_cn": "Minecraft 版本未知。",
+        "zh_tw": "Minecraft 版本未知。"
+    },
+    "any": {
+        "en": "any",
+        "zh_cn": "任何",
+        "zh_tw": "任何"
+    },
+    "or": {
+        "en": "or",
+        "zh_cn": "或",
+        "zh_tw": "或"
+    },
+    "dependencies.unless": {
+        "en": "Unless install %{unless}",
+        "zh_cn": "除非安装 %{unless}",
+        "zh_tw": "除非安裝 %{unless}, "
+    },
+    "dependencies.reason": {
+        "en": "Because %{reason}",
+        "zh_cn": "因为 %{reason}",
+        "zh_tw": "因為 %{reason}"
+    },
+    "dependencies.dependency_unmet": {
+        "en": "%{source} %{relation} %{dependency}.",
+        "zh_cn": "%{source} %{relation} %{dependency}。",
+        "zh_tw": "%{source} %{relation} %{dependency}。"
+    },
+    "dependencies.minecraft_wrong": {
+        "en": "%{source} mod needs Minecraft version %{need}, but currently %{current} is installed.",
+        "zh_cn": "%{source} 模组需要 Minecraft %{need}, 但已安装 %{current}。",
+        "zh_tw": "%{source} 模組需要 Minecraft %{need}, 但已安裝 %{current}。"
+    },
+    "dependencies.relation.depends": {
+        "en": "depends on",
+        "zh_cn": "依赖于",
+        "zh_tw": "依賴於"
+    },
+    "dependencies.relation.recommends": {
+        "en": "recommends",
+        "zh_cn": "推荐使用",
+        "zh_tw": "推薦使用"
+    },
+    "dependencies.relation.suggests": {
+        "en": "suggests",
+        "zh_cn": "建议使用",
+        "zh_tw": "建議使用"
+    },
+    "dependencies.relation.conflicts": {
+        "en": "conflicts with",
+        "zh_cn": "可能不兼容",
+        "zh_tw": "可能不兼容"
+    },
+    "dependencies.relation.breaks": {
+        "en": "breaks",
+        "zh_cn": "不兼容",
+        "zh_tw": "不兼容"
+    }
+}
