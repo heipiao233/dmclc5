@@ -1,7 +1,11 @@
 [package]
 name = "dmclc5"
 version = "0.1.0"
+authors = ["heipiao233"]
 edition = "2021"
+description = "A minecraft launching library"
+license = "GPL-3.0"
+repository = "https://github.com/heipiao233/dmclc5"
 
 [dependencies]
 acc_reader = { version = "2", optional = true }
