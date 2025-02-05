@@ -27,7 +27,7 @@ serde_repr = { version = "0.1", optional = true }
 sha1 = "0.10"
 sha2 = "0.10"
 tempfile = { version = "3", optional = true }
-tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "io-std"] }
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "io-std", "rt-multi-thread"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 toml = { version = "0.8", optional = true }
 uuid = { version = "1", features = ["serde"] }
