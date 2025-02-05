@@ -1,9 +1,10 @@
 [package]
 name = "dmclc5"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["heipiao233"]
 edition = "2021"
 description = "A minecraft launching library"
+documentation = "https://docs.rs/dmclc5"
 license = "GPL-3.0"
 repository = "https://github.com/heipiao233/dmclc5"
 
