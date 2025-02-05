@@ -447,7 +447,7 @@ dependencies = [
  "md5",
  "murmur2",
  "open",
- "osstrtools",
+ "osstrtools-fix",
  "reqwest",
  "rust-i18n",
  "serde",
@@ -1412,9 +1412,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "osstrtools"
-version = "0.2.2"
-source = "git+https://github.com/heipiao233/osstrtools#e8ebd576e11122a9dcf81b0cb8ed17296984838d"
+name = "osstrtools-fix"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fef0f8f3456c8e6a0ce8bb6da8e8d870acae590b9d1faf59bec06f8512f56fc0"
 dependencies = [
  "itertools 0.8.2",
 ]

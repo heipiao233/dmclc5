@@ -3,7 +3,7 @@
 use std::{collections::HashMap, ffi::{OsStr, OsString}, fs::File, path::PathBuf};
 
 use anyhow::{Ok, Result};
-use osstrtools::{Bytes, OsStringTools};
+use osstrtools_fix::{Bytes, OsStringTools};
 use uuid::Uuid;
 
 use crate::utils::{check_rules, check_rules_no_option, get_bits, get_os, PATH_DELIMITER};
