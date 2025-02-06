@@ -4,9 +4,10 @@ use std::{collections::HashMap, ffi::{OsStr, OsString}, fs::File, path::PathBuf}
 
 use anyhow::{Ok, Result};
 use osstrtools_fix::{Bytes, OsStringTools};
+use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::utils::{check_rules, check_rules_no_option, get_bits, get_os, PATH_DELIMITER};
+use crate::utils::{check_rules, check_rules_no_option, get_bits, get_os, DownloadAllMessage, PATH_DELIMITER};
 
 use super::{login::Account, schemas::{Argument, Library, OneOrMoreArguments, VersionJSON}, version::MinecraftInstallation};
 
@@ -15,12 +16,12 @@ impl <'a> MinecraftInstallation<'a> {
     /// Please run [super::version::DMCLCExtraData::before_command] before launching.
     /// Please use [super::version::DMCLCExtraData::with_java].
     /// Please set the work dir to [Self::get_cwd].
-    pub async fn launch_args(&self, account: &mut dyn Account) -> Result<Vec<OsString>> {
+    pub async fn launch_args(&self, account: &mut dyn Account, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<Vec<OsString>> {
         if !account.is_initialized() || !account.check(&self.launcher).await {
             account.login(&self.launcher).await?;
         }
         account.prepare_launch(&self.version_launch_work_dir, &self.launcher).await?;
-        self.complete_files(false, false).await?;
+        self.complete_files(false, false, download_channel).await?;
         self.unzip_natives()?;
         let mut args = vec![];
         let cp = self.gen_classpath().join(PATH_DELIMITER.bytes_as_os_str());

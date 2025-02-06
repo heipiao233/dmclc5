@@ -8,9 +8,9 @@ use fs_extra::dir::CopyOptions;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use tempfile::TempDir;
-use tokio::{fs, process::Command};
+use tokio::{fs, process::Command, sync::mpsc};
 
-use crate::{components::mods::ModLoader, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json, BetterPath, PATH_DELIMITER}, LauncherContext};
+use crate::{components::mods::ModLoader, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json, BetterPath, DownloadAllMessage, PATH_DELIMITER}, LauncherContext};
 
 use super::ComponentInstaller;
 
@@ -106,7 +106,7 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
             .filter(|v| self.match_version(&v, &mc.extra_data.version.as_ref().unwrap())).collect())
     }
 
-    async fn install(&self, mc: &mut MinecraftInstallation, version: &str) -> Result<()> {
+    async fn install(&self, mc: &mut MinecraftInstallation, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         let mcver = mc.extra_data.version.as_ref().unwrap().clone();
         let mut tmpfile = tokio::fs::File::from_std(tempfile::tempfile()?);
         let url = format!("{}/{1}/{version}/{}-{version}-installer.jar", self.get_maven_group_url(), self.get_archive_base_name(&mcver));
@@ -128,13 +128,12 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
                 if let Ok(f) = fs::metadata(&maven_dir).await && f.is_dir() {
                     fs_extra::dir::copy(&maven_dir, &mc.launcher.root_path / "libraries", &CopyOptions::new().content_only(true))?;
                 }
-                let mut res = Vec::new();
-                mc.install_libraries(&metadata.libraries, &mut res, false)?;
+                let mut res = mc.install_libraries(&metadata.libraries, false)?;
                 let target = &mc.obj;
                 let source: VersionJSON = serde_json::from_reader(std::fs::File::open(installer_dir / "version.json")?)?;
                 result = merge_version_json(target, &source)?;
-                mc.install_libraries(&source.get_base().libraries, &mut res, false)?;
-                download_all(&res).await?;
+                res.extend(mc.install_libraries(&source.get_base().libraries, false)?);
+                download_all(&res, download_channel).await?;
 
                 for processor in &metadata.processors {
                     if processor.args.contains(&"DOWNLOAD_MOJMAPS".to_string()) {

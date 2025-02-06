@@ -8,8 +8,9 @@ pub mod fabriclike;
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use tokio::sync::mpsc;
 
-use crate::{minecraft::{schemas::VersionJSON, version::{ComponentInfo, MinecraftInstallation}}, LauncherContext};
+use crate::{minecraft::{schemas::VersionJSON, version::{ComponentInfo, MinecraftInstallation}}, utils::DownloadAllMessage, LauncherContext};
 
 use super::mods::ModLoader;
 
@@ -23,7 +24,7 @@ pub trait ComponentInstaller: Send + Sync {
     /// Install for a [MinecraftInstallation].
     /// Clients should not call this directly, as it doesn't append [crate::minecraft::version::DMCLCExtraData::components]
     /// Insteadly, clients should call [MinecraftInstallation::install_component].
-    async fn install(&self, mc: &mut MinecraftInstallation, version: &str) -> Result<()>;
+    async fn install(&self, mc: &mut MinecraftInstallation, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()>;
 
     /// Find this component in a [MinecraftInstallation]. Returns the version of the component.
     fn find_in_version(&self, v: &VersionJSON) -> Option<String>;
@@ -36,11 +37,11 @@ pub trait ComponentInstaller: Send + Sync {
 
 impl MinecraftInstallation<'_> {
     /// Install a component.
-    pub async fn install_component(&mut self, component: &str, version: &str) -> Result<()> {
+    pub async fn install_component(&mut self, component: &str, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         if let None = self.extra_data.version {
             return Err(anyhow!(t!("loaders.minecraft_version_unknown")));
         }
-        self.launcher.component_installers[component].install(self, version).await?;
+        self.launcher.component_installers[component].install(self, version, download_channel).await?;
         self.extra_data.components.push(ComponentInfo {
             name: component.to_string(),
             version: version.to_string()

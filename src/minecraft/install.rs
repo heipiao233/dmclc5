@@ -4,9 +4,9 @@ use std::marker::PhantomData;
 
 use anyhow::{Ok, Result};
 use sha1::Sha1;
-use tokio::{fs, io::AsyncReadExt};
+use tokio::{fs, io::AsyncReadExt, sync::mpsc};
 
-use crate::{utils::{check_hash, check_rules, download_all, download_txt, get_os, BetterPath}, LauncherContext};
+use crate::{utils::{check_hash, check_rules, download_all, download_txt, get_os, BetterPath, DownloadAllMessage}, LauncherContext};
 
 use super::{schemas::{AssetsIndex, Library, Resource, VersionInfo, VersionJSON}, version::{DMCLCExtraData, MinecraftInstallation}};
 /// The version list of Minecraft.
@@ -41,7 +41,7 @@ impl VersionList {
 
 impl VersionInfo {
     /// Install
-    pub async fn install<'l>(&self, launcher: &'l LauncherContext, name: &str) -> Result<MinecraftInstallation<'l>> {
+    pub async fn install<'l>(&self, launcher: &'l LauncherContext, name: &str, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<MinecraftInstallation<'l>> {
         let res = reqwest::get(&self.url).await?;
         let text = res.text().await?;
         let obj: VersionJSON = serde_json::from_str(&text)?;
@@ -57,28 +57,29 @@ impl VersionInfo {
             extra_game_arguments: None,
             extra_jvm_arguments: None
         }));
-        v.complete_files(true, true).await?;
+        v.complete_files(true, true, channel).await?;
         Ok(v)
     }
 }
 
 impl <'l> MinecraftInstallation<'l> {
     /// Download all the broken/missing files for the [MinecraftInstallation].
-    pub async fn complete_files(&self, always_download_nohash: bool, fix_client_jar: bool) -> Result<()> {
+    pub async fn complete_files(&self, always_download_nohash: bool, fix_client_jar: bool, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         let mut resources: Vec<(Resource, BetterPath)> = Vec::new();
         let client_res = &self.obj.get_base().downloads.client;
         let version_dir = *(&self.launcher.root_path / "versions" / &self.name);
         if fix_client_jar { resources.push((client_res.clone(), *(&version_dir / format!("{}.jar", self.name)))); }
-        self.install_resources(&mut resources).await?;
-        self.install_libraries(&self.obj.get_base().libraries, &mut resources, always_download_nohash)?;
-        download_all(&resources).await?;
+        resources.extend(self.install_resources().await?);
+        resources.extend(self.install_libraries(&self.obj.get_base().libraries, always_download_nohash)?);
+        download_all(&resources, channel).await?;
         Ok(())
     }
 
-    async fn install_resources(&self, res: &mut Vec<(Resource, BetterPath)>) -> Result<()> {
+    async fn install_resources(&self) -> Result<Vec<(Resource, BetterPath)>> {
+        let mut res = vec![];
         let assets = &self.obj.get_base().asset_index;
         let asset_path = &(&self.launcher.root_path / "assets/indexes" / &format!("{}.json", assets.res.id));
-        let index = if check_hash(asset_path, &assets.res.res.sha1, assets.res.res.size, PhantomData::<Sha1>).await {
+        let index = if !check_hash(asset_path, &assets.res.res.sha1, assets.res.res.size, PhantomData::<Sha1>).await {
             download_txt(&assets.res.res.url, asset_path).await?
         } else {
             let mut str = String::new();
@@ -95,10 +96,11 @@ impl <'l> MinecraftInstallation<'l> {
                 size: val.size
             }, *(&self.launcher.root_path / "assets/objects" / &path)))
         }
-        Ok(())
+        Ok(res)
     }
     
-    pub(crate) fn install_libraries(&self, libraries: &Vec<Library>, res: &mut Vec<(Resource, BetterPath)>, always_download_nohash: bool) -> Result<()> {
+    pub(crate) fn install_libraries(&self, libraries: &Vec<Library>, always_download_nohash: bool) -> Result<Vec<(Resource, BetterPath)>> {
+        let mut res = vec![];
         let lib_path = &*(&self.launcher.root_path / "libraries");
         for lib in libraries {
             if !check_rules(&lib.get_base().rules) {
@@ -140,6 +142,6 @@ impl <'l> MinecraftInstallation<'l> {
                 }
             }
         }
-        Ok(())
+        Ok(res)
     }
 }

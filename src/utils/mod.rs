@@ -20,7 +20,7 @@ use crate::components::mods::VersionBound;
 use crate::minecraft::schemas::{Arguments, EnvRule, OSType, VersionJSON};
 
 pub use self::better_path::BetterPath;
-pub use self::download::{download, download_res, download_txt, download_all, check_hash, download_to_writer};
+pub use self::download::{download, download_res, download_txt, download_all, check_hash, download_to_writer, DownloadAllMessage};
 
 #[cfg(not(target_os="windows"))]
 /// The path delimiter.

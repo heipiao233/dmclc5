@@ -5,8 +5,9 @@ use std::{future::Future, pin::Pin};
 use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 
-use crate::{components::mods::{fabric::FabricModLoader, quilt::QuiltModLoader, ModLoader}, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::{download, maven_coord::ArtifactCoordinate, merge_version_json}, LauncherContext};
+use crate::{components::mods::{fabric::FabricModLoader, quilt::QuiltModLoader, ModLoader}, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::{download, download_all, maven_coord::ArtifactCoordinate, merge_version_json, DownloadAllMessage}, LauncherContext};
 
 use super::ComponentInstaller;
 
@@ -120,7 +121,7 @@ impl ComponentInstaller for FabricLikeInstaller {
         Ok(res)
     }
 
-    async fn install(&self, mc: &mut MinecraftInstallation, version: &str) -> Result<()> {
+    async fn install(&self, mc: &mut MinecraftInstallation, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         let mcversion = mc.extra_data.version.as_ref().unwrap();
         let version_info: VersionJSON = reqwest::get(format!("{}/versions/loader/{}/{}/profile/json", self.meta_url,
             form_urlencoded::byte_serialize(mcversion.as_bytes()).collect::<String>(),
@@ -128,6 +129,8 @@ impl ComponentInstaller for FabricLikeInstaller {
         ).await?.json().await?;
         mc.obj = merge_version_json(&mc.obj, &version_info)?;
         serde_json::to_writer(&std::fs::File::create(&mc.version_root / (mc.name.to_string() + ".json"))?, &mc.obj)?;
+        let res = mc.install_libraries(&version_info.get_base().libraries, true)?;
+        download_all(&res, download_channel).await?;
         Ok(())
     }
 
