@@ -152,6 +152,12 @@ impl LauncherContext {
     /// * `ui` - Your implementation of [UserInterface].
     pub async fn new(root_path: &Path, #[cfg(feature="msa_auth")] ms_client_id: &str, ui: impl UserInterface + 'static) -> Result<Self> {
         let root_path = BetterPath(root_path.to_path_buf().canonicalize()?);
+        if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&root_path / "libraries").await {
+            tokio::fs::create_dir_all(&root_path / "libraries").await?;
+        }
+        if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&root_path / "assets").await {
+            tokio::fs::create_dir(&root_path / "assets").await?;
+        }
         tokio::fs::File::create(&root_path / "libraries" / "CACHEDIR.TAG").await?.write(CACHEDIR_TAG.as_bytes()).await?;
         tokio::fs::File::create(&root_path / "assets" / "CACHEDIR.TAG").await?.write(CACHEDIR_TAG.as_bytes()).await?;
         #[allow(unused_mut)]
