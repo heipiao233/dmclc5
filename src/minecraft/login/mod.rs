@@ -16,7 +16,7 @@ use super::version::MinecraftInstallation;
 
 /// An account.
 #[async_trait]
-pub trait Account: Display {
+pub trait Account: Display + Send + Sync {
     /// Check if it's initialized.
     fn is_initialized(&self) -> bool;
 
