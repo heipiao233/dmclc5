@@ -52,7 +52,6 @@ pub async fn download_res(res: &Resource, path: &BetterPath) -> Result<()> {
 pub type DownloadAllMessage = std::result::Result<(BetterPath, FetchEvent), (BetterPath, anyhow::Error)>;
 
 async fn check_and_download(path: &BetterPath, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
-    println!("check_and_download");
     if !check_hash(path, &res.sha1, res.size, PhantomData::<Sha1>).await {
         let _ = fs::create_dir_all(&path.0.parent().unwrap()).await;
         Some((Source {
@@ -95,21 +94,17 @@ pub async fn download_all(
         .stream_from(futures_util::stream::iter(sources), parallel_files * (threads_per_file as usize));
     let channel2 = channel.clone();
     let fetch_task = async move {
-        println!("fetch_task");
         while let Some((path, _, result)) = fetcher.next().await {
             if let Err(e) = result {
                 let _ = tokio::fs::remove_file(&path).await;
                 let _ = channel2.send(Err((BetterPath::from(path.to_path_buf()), e.into())));
             }
         }
-        println!("fetch_task end");
     };
     let send_task = async move {
-        println!("send_task");
         while let Some((path, _, event)) = rx.recv().await {
             let _ = channel.send(Ok((BetterPath::from(path.to_path_buf()), event)));
         }
-        println!("send_task end");
     };
     tokio::join!(fetch_task, send_task);
     Ok(())

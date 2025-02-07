@@ -110,7 +110,6 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
         let mcver = mc.extra_data.version.as_ref().unwrap().clone();
         let mut tmpfile = tokio::fs::File::from_std(tempfile::tempfile()?);
         let url = format!("{}/{1}/{version}/{}-{version}-installer.jar", self.get_maven_group_url(), self.get_archive_base_name(&mcver));
-        println!("{}", url);
         download_to_writer(&url, &mut tmpfile).await?;
         let installer_dir = &BetterPath(tempfile::tempdir()?);
         zip::ZipArchive::new(tmpfile.into_std().await)?.extract(installer_dir)?;
