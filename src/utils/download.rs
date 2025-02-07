@@ -1,13 +1,14 @@
 /// Things about downloading.
 
-use std::{io::Write, marker::PhantomData, ops::Add, os::unix::fs::MetadataExt};
+use std::{io::Write, marker::PhantomData, ops::Add, os::unix::fs::MetadataExt, sync::Arc, time::Duration};
 
 use anyhow::Result;
-use futures_util::{future::join_all, io::AllowStdIo, StreamExt};
+use async_fetcher::{FetchEvent, Fetcher, Source};
+use futures_util::{io::AllowStdIo, StreamExt};
 
 use reqwest::IntoUrl;
 use sha1::{digest::{generic_array::ArrayLength, OutputSizeUser}, Digest, Sha1};
-use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::{mpsc, Semaphore}};
+use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use crate::minecraft::schemas::Resource;
@@ -48,43 +49,80 @@ pub async fn download_res(res: &Resource, path: &BetterPath) -> Result<()> {
 }
 
 /// Messages for download_all in channel.
-#[derive(Clone)]
-pub enum DownloadAllMessage {
-    /// Download has started with these urls.
-    Started(Vec<String>),
-    /// This url is finished.
-    SingleFinished(String),
-    /// This resource(1) is finished with error(2)
-    SingleError(Resource, String)
+pub type DownloadAllMessage = std::result::Result<(BetterPath, FetchEvent), (BetterPath, anyhow::Error)>;
+
+async fn check_and_download(path: &BetterPath, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
+    println!("check_and_download");
+    if !check_hash(path, &res.sha1, res.size, PhantomData::<Sha1>).await {
+        let _ = fs::create_dir_all(&path.0.parent().unwrap()).await;
+        Some((Source {
+            dest: Arc::from(path.0.as_path()),
+            urls,
+            part: None
+        }, Arc::new(())))
+    } else {
+        None
+    }
 }
 
 /// Download [Resource]s to paths.
-pub async fn download_all(resources: &Vec<(Resource, BetterPath)>, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
-    let semaphore = Semaphore::new(16);
-    let mut futures = Vec::new();
-    channel.send(DownloadAllMessage::Started(resources.iter().map(|v|v.0.url.clone()).collect()))?;
+pub async fn download_all(
+    resources: &Vec<(Resource, BetterPath)>, channel: mpsc::UnboundedSender<DownloadAllMessage>,
+    threads_per_file: u16, parallel_files: usize, retries: usize,
+    mirror: Option<String>
+) -> Result<()> {
+    let mut check_futures = vec![];
     for (res, path) in resources {
-        futures.push(download_res_helper(res, path, channel.clone(), &semaphore));
-    }
-    for result in join_all(futures).await {
-        if result.is_err() {
-            // channel.closed().await;
-            return result;
+        let urls: Arc<[Box<str>]>;
+        if let Some(mirror) = &mirror {
+            urls = Arc::new([Box::from(mirrored(res.url.clone(), mirror.clone()).as_str()), Box::from(res.url.as_str())]);
+        } else {
+            urls = Arc::new([Box::from(res.url.as_str())]);
         }
+        check_futures.push(check_and_download(path, res, urls));
     }
-    // channel.closed().await;
+    let sources: Vec<_> = futures_util::future::join_all(check_futures).await
+        .into_iter()
+        .filter(|v|v.is_some())
+        .map(|v|v.unwrap()).collect();
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    let mut fetcher = Fetcher::default()
+        .events(tx)
+        .retries(retries as u16)
+        .timeout(Duration::from_secs(15))
+        .connections_per_file(threads_per_file)
+        .build()
+        .stream_from(futures_util::stream::iter(sources), parallel_files * (threads_per_file as usize));
+    let channel2 = channel.clone();
+    let fetch_task = async move {
+        println!("fetch_task");
+        while let Some((path, _, result)) = fetcher.next().await {
+            if let Err(e) = result {
+                let _ = tokio::fs::remove_file(&path).await;
+                let _ = channel2.send(Err((BetterPath::from(path.to_path_buf()), e.into())));
+            }
+        }
+        println!("fetch_task end");
+    };
+    let send_task = async move {
+        println!("send_task");
+        while let Some((path, _, event)) = rx.recv().await {
+            let _ = channel.send(Ok((BetterPath::from(path.to_path_buf()), event)));
+        }
+        println!("send_task end");
+    };
+    tokio::join!(fetch_task, send_task);
     Ok(())
 }
 
-async fn download_res_helper(res: &Resource, path: &BetterPath, channel: mpsc::UnboundedSender<DownloadAllMessage>, semaphore: &Semaphore) -> Result<()> {
-    let _ = semaphore.acquire().await?;
-    let v = download_res(res, path).await;
-    if let Err(e) = &v {
-        channel.clone().send(DownloadAllMessage::SingleError(res.clone(), format!("{e}")))?;
-    } else {
-        channel.clone().send(DownloadAllMessage::SingleFinished(res.url.clone()))?;
-    }
-    v
+fn mirrored(url: String, mirror: String) -> String {
+    return url
+        .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
+        .replace("libraries.minecraft.net", &format!("{mirror}/maven"))
+        .replace("files.minecraftforge.net", &mirror)
+        .replace("maven.fabricmc.net", &mirror)
+        .replace("maven.neoforged.net/releases/net/neoforged/neoforge", &format!("{mirror}/maven/net/neoforged/neoforge"))
+        .replace("resources.download.minecraft.net", &format!("{mirror}/assets"));
 }
 
 /// Read the `url` into the `writer`.

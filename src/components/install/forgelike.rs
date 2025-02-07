@@ -133,7 +133,11 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
                 let source: VersionJSON = serde_json::from_reader(std::fs::File::open(installer_dir / "version.json")?)?;
                 result = merge_version_json(target, &source)?;
                 res.extend(mc.install_libraries(&source.get_base().libraries, false)?);
-                download_all(&res, download_channel).await?;
+                download_all(
+                    &res, download_channel, mc.launcher.download_threads_per_file,
+                    mc.launcher.download_parallel_files, mc.launcher.download_retries,
+                    mc.launcher.bmclapi_mirror.clone()
+                ).await?;
 
                 for processor in &metadata.processors {
                     if processor.args.contains(&"DOWNLOAD_MOJMAPS".to_string()) {

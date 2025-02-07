@@ -71,7 +71,11 @@ impl <'l> MinecraftInstallation<'l> {
         if fix_client_jar { resources.push((client_res.clone(), *(&version_dir / format!("{}.jar", self.name)))); }
         resources.extend(self.install_resources().await?);
         resources.extend(self.install_libraries(&self.obj.get_base().libraries, always_download_nohash)?);
-        download_all(&resources, channel).await?;
+        download_all(
+            &resources, channel,
+            self.launcher.download_threads_per_file, self.launcher.download_parallel_files,
+            self.launcher.download_retries,self.launcher.bmclapi_mirror.clone()
+        ).await?;
         Ok(())
     }
 

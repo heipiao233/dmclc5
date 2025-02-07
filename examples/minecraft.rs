@@ -6,25 +6,35 @@ use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
-        DownloadAllMessage::Started(urls) => {
-            *count = urls.len();
-            println!("Download starts with: {} ({count})", urls.join("\n"));
-        }
-        DownloadAllMessage::SingleFinished(url) => {
+        Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
+            *count += 1;
+            println!("{} start: {len} ({count})", c.0.display());
+        },
+        Ok((c, async_fetcher::FetchEvent::Fetched)) => {
             *count -= 1;
-            println!("{} finished. ({count} remaining)", url);
-        }
-
-        DownloadAllMessage::SingleError(res, error) => {
+            println!("{} end ({count})", c.0.display());
+        },
+        Ok((_, async_fetcher::FetchEvent::Fetching)) => (),
+        Ok((c, async_fetcher::FetchEvent::Progress(prog))) => {
+            println!("{} fetching: {prog}", c.0.display());
+        },
+        Ok((c, async_fetcher::FetchEvent::Retrying))=> {
+            println!("{} retrying", c.0.display());
+        },
+        Err((c, e)) => {
             *count -= 1;
-            println!("{} finished with error {}. ({count} remaining)", res.url, error);
+            println!("{} error {e} ({count})", c.0.display());
         }
     }
 }
 
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
-    let launcher = LauncherContext::new(Path::new("./test"), StdioUserInterface).await?;
+    let launcher = {
+        let mut launcher = LauncherContext::new(Path::new("./test"), StdioUserInterface).await?;
+        launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
+        launcher
+    };
     let (tx, mut rx) = mpsc::unbounded_channel();
     let message_handler = async move {
         let mut count = 0;

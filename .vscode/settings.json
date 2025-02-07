@@ -3,5 +3,9 @@
         "components_installation",
         "mod_loaders",
         "content_services"
-    ]
+    ],
+    "lldb.displayFormat": "auto",
+    "lldb.showDisassembly": "never",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands"
 }

@@ -130,7 +130,10 @@ impl ComponentInstaller for FabricLikeInstaller {
         mc.obj = merge_version_json(&mc.obj, &version_info)?;
         serde_json::to_writer(&std::fs::File::create(&mc.version_root / (mc.name.to_string() + ".json"))?, &mc.obj)?;
         let res = mc.install_libraries(&version_info.get_base().libraries, true)?;
-        download_all(&res, download_channel).await?;
+        download_all(&res, download_channel,
+            mc.launcher.download_threads_per_file, mc.launcher.download_parallel_files, mc.launcher.download_retries,
+            mc.launcher.bmclapi_mirror.clone()
+        ).await?;
         Ok(())
     }
 

@@ -51,7 +51,15 @@ pub struct LauncherContext {
     /// A HashMap of [ContentService]s.
     pub content_services: HashMap<String, Box<dyn ContentService>>,
     /// A HashMap of [AccountConstructor]s.
-    pub account_types: HashMap<String, Box<dyn AccountConstructor>>
+    pub account_types: HashMap<String, Box<dyn AccountConstructor>>,
+    /// Max download retry times.
+    pub download_retries: usize,
+    /// Max download threads per file.
+    pub download_threads_per_file: u16,
+    /// Max parallel downloading files.
+    pub download_parallel_files: usize,
+    /// BMCLAPI mirror.
+    pub bmclapi_mirror: Option<String>
 }
 
 /// A trait for interacting with users that should be implemented by the client.
@@ -150,13 +158,21 @@ impl LauncherContext {
     /// * `root_path` - The `.minecraft` directory.
     #[cfg_attr(feature="msa_auth", doc=r" * `ms_client_id` - The client id for Microsoft auth. See [Microsoft's document](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app).")]
     /// * `ui` - Your implementation of [UserInterface].
-    pub async fn new(root_path: &Path, #[cfg(feature="msa_auth")] ms_client_id: &str, ui: impl UserInterface + 'static) -> Result<Self> {
-        let root_path = BetterPath(root_path.to_path_buf().canonicalize()?);
-        if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&root_path / "libraries").await {
-            tokio::fs::create_dir_all(&root_path / "libraries").await?;
-        }
-        if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&root_path / "assets").await {
+    pub async fn new(mc_path: &Path, #[cfg(feature="msa_auth")] ms_client_id: &str, ui: impl UserInterface + 'static) -> Result<Self> {
+        let root_path: BetterPath;
+        if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&mc_path).await {
+            tokio::fs::create_dir_all(&mc_path).await?;
+            root_path = BetterPath(mc_path.to_path_buf().canonicalize()?);
+            tokio::fs::create_dir(&root_path / "libraries").await?;
             tokio::fs::create_dir(&root_path / "assets").await?;
+        } else {
+            root_path = BetterPath(mc_path.to_path_buf().canonicalize()?);
+            if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&root_path / "libraries").await {
+                tokio::fs::create_dir_all(&root_path / "libraries").await?;
+            }
+            if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&root_path / "assets").await {
+                tokio::fs::create_dir(&root_path / "assets").await?;
+            }
         }
         tokio::fs::File::create(&root_path / "libraries" / "CACHEDIR.TAG").await?.write(CACHEDIR_TAG.as_bytes()).await?;
         tokio::fs::File::create(&root_path / "assets" / "CACHEDIR.TAG").await?.write(CACHEDIR_TAG.as_bytes()).await?;
@@ -191,7 +207,11 @@ impl LauncherContext {
                 "offline".to_string() => Box::new(OfflineAccountConstructor),
                 "minecraft_universal_login".to_string() => Box::new(MinecraftUniversalLoginAccountConstructor),
                 "authlib_injector".to_string() => Box::new(AuthlibInjectorAccountConstructor)
-            }
+            },
+            download_retries: 5,
+            download_threads_per_file: 8,
+            download_parallel_files: 8,
+            bmclapi_mirror: None
         };
         Ok(ctx)
     }

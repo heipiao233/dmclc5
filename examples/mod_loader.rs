@@ -3,17 +3,26 @@ use std::{path::{Path, PathBuf}, str::FromStr};
 use dmclc5::{minecraft::schemas::VersionList, utils::{download, BetterPath, DownloadAllMessage}, LauncherContext, StdioUserInterface};
 use tokio::sync::mpsc;
 
-async fn handle_msg(msg: DownloadAllMessage) {
+async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
-        DownloadAllMessage::Started(urls) => {
-            println!("Download starts with: {}", urls.join("\n"));
-        }
-        DownloadAllMessage::SingleFinished(url) => {
-            println!("{} finished.", url);
-        }
-
-        DownloadAllMessage::SingleError(res, error) => {
-            println!("{} finished with error {}.", res.url, error);
+        Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
+            *count += 1;
+            println!("{} start: {len} ({count})", c.0.display());
+        },
+        Ok((c, async_fetcher::FetchEvent::Fetched)) => {
+            *count -= 1;
+            println!("{} end ({count})", c.0.display());
+        },
+        Ok((_, async_fetcher::FetchEvent::Fetching)) => (),
+        Ok((c, async_fetcher::FetchEvent::Progress(prog))) => {
+            println!("{} fetching: {prog}", c.0.display());
+        },
+        Ok((c, async_fetcher::FetchEvent::Retrying))=> {
+            println!("{} retrying", c.0.display());
+        },
+        Err((c, e)) => {
+            *count -= 1;
+            println!("{} error {e} ({count})", c.0.display());
         }
     }
 }
@@ -23,8 +32,9 @@ async fn main() {
     let launcher: LauncherContext = LauncherContext::new(Path::new("./test"), StdioUserInterface).await.unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
+        let mut count = 0;
         while let Some(next) = rx.recv().await {
-            handle_msg(next).await;
+            handle_msg(next, &mut count).await;
         }
     };
     let mc = VersionList::get_list().await.unwrap();
@@ -32,8 +42,9 @@ async fn main() {
     let mut mc = tokio::join!(handler, mc).1.unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
+        let mut count = 0;
         while let Some(next) = rx.recv().await {
-            handle_msg(next).await;
+            handle_msg(next, &mut count).await;
         }
     };
     tokio::join!(mc.install_component("fabric", "0.16.0", tx), handler).0.unwrap();
