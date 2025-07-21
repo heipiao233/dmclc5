@@ -8,9 +8,9 @@ use tokio::{fs, io::AsyncReadExt, sync::mpsc};
 
 use crate::{utils::{check_hash, check_rules, download_all, download_txt, get_os, BetterPath, DownloadAllMessage}, LauncherContext};
 
-use super::{schemas::{AssetsIndex, Library, Resource, VersionInfo, VersionJSON}, version::{DMCLCExtraData, MinecraftInstallation}};
+use super::{schemas::{AssetsIndex, Library, Resource, VersionJSON}, version::{DMCLCExtraData, MinecraftInstallation}};
 /// The version list of Minecraft.
-pub use super::schemas::VersionList;
+pub use super::schemas::{VersionList, VersionInfo};
 
 const MC_MANIFEST_URL: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 
