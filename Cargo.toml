@@ -1,6 +1,6 @@
 [package]
 name = "dmclc5"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["heipiao233"]
 edition = "2024"
 description = "A minecraft launching library"
