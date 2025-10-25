@@ -1,6 +1,6 @@
 [package]
 name = "dmclc5"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["heipiao233"]
 edition = "2024"
 description = "A minecraft launching library"
@@ -35,11 +35,11 @@ sha2 = "0.10"
 tempfile = { version = "3", optional = true }
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "io-std", "rt-multi-thread"] }
 tokio-util = { version = "0.7", features = ["compat"] }
-toml = { version = "0.8", optional = true }
+toml = { version = "0.9", optional = true }
 uuid = { version = "1", features = ["serde"] }
 versions = { version = "6", features = ["serde"], optional = true }
 xmltree = { version = "0.10", optional = true }
-zip = "2"
+zip = "6"
 
 [features]
 components_installation = ["dep:form_urlencoded", "dep:fs_extra", "dep:tempfile", "dep:xmltree"]
