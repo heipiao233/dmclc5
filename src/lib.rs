@@ -1,5 +1,4 @@
 #![warn(missing_docs)]
-#![feature(let_chains)]
 #![feature(iter_intersperse)]
 #![feature(iter_array_chunks)]
 

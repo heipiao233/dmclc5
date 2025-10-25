@@ -2,7 +2,7 @@
 name = "dmclc5"
 version = "0.3.0"
 authors = ["heipiao233"]
-edition = "2021"
+edition = "2024"
 description = "A minecraft launching library"
 documentation = "https://docs.rs/dmclc5"
 license = "GPL-3.0"
