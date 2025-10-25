@@ -4,7 +4,7 @@
 pub mod microsoft;
 pub mod yggdrasil;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
@@ -86,7 +86,7 @@ impl Account for OfflineAccount {
     }
 
     async fn login(&mut self, launcher: &LauncherContext) -> Result<()> {
-        self.0 = Some(launcher.ui.ask_user_one(&t!("accounts.offline.username"), None).await);
+        self.0 = Some(launcher.ui.ask_user_one(&t!("accounts.offline.username"), None).await.ok_or(anyhow!("User cancelled."))?);
         Ok(())
     }
 

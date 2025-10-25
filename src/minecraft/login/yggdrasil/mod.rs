@@ -53,11 +53,11 @@ pub trait YggdrasilAccount: Send + Sync + Display {
     /// Set [YggdrasilUserData].
     fn set_data(&mut self, data: YggdrasilUserData);
     /// Ask user the API url.
-    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> String;
+    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> Result<String>;
     /// Get the API url.
-    async fn get_api_url(&mut self, launcher: &LauncherContext) -> String {
+    async fn get_api_url(&mut self, launcher: &LauncherContext) -> Result<String> {
         if let Some(data) = self.get_data() {
-            data.api_url.clone()
+            Ok(data.api_url.clone())
         } else {
             self.ask_api_url(&launcher).await
         }
@@ -80,6 +80,10 @@ impl <T: YggdrasilAccount> Account for T {
             return false;
         }
         let api_url = self.get_api_url(&launcher).await;
+        if let Err(_) = api_url {
+            return false;
+        }
+        let api_url = api_url.unwrap();
         let http = &(launcher.http_client);
         let data = self.get_data().as_ref().unwrap();
         let req: Value = json!({
@@ -96,8 +100,8 @@ impl <T: YggdrasilAccount> Account for T {
         let content = launcher.ui.ask_user(vec![
             ("username", "Username"),
             ("password", "Password")
-        ], None).await; // TODO: i18n
-        let api_url = self.get_api_url(&launcher).await;
+        ], None).await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
+        let api_url = self.get_api_url(&launcher).await?;
         let http = &launcher.http_client;
 
         let meta: Value = http.get(&api_url).send().await?.json().await?;
@@ -119,7 +123,7 @@ impl <T: YggdrasilAccount> Account for T {
             return Err(anyhow!("Yggdrasil auth returned error code {}", auth_res.status())); // TODO: i18n
         }
         let auth_res: AuthResponse = auth_res.json().await?;
-        let profile_id = launcher.ui.ask_user_choose(auth_res.available_profiles.iter().map(|i|i.name.as_str()).collect(), "Please select profile").await; // TODO: i18n
+        let profile_id = launcher.ui.ask_user_choose(auth_res.available_profiles.iter().map(|i|i.name.as_str()).collect(), "Please select profile").await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
         let profile = &auth_res.available_profiles[profile_id];
         self.set_data(YggdrasilUserData {
             api_url,

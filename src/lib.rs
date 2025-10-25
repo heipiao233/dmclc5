@@ -22,6 +22,8 @@ use reqwest::Client;
 use tokio::{fs::{self, create_dir_all}, io::AsyncWriteExt};
 use tokio_util::codec::{FramedRead, LinesCodec};
 use utils::{osstr_concat, BetterPath};
+
+use crate::utils::merge_version_json;
 #[macro_use]
 extern crate rust_i18n;
 
@@ -75,10 +77,10 @@ pub trait UserInterface: Send + Sync {
     /// 
     /// # Returns
     /// A HashMap. The keys are the first element of each item in the argument `questions`, the values is the answers from the user for each questions.
-    async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> HashMap<String, String>;
+    async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> Option<HashMap<String, String>>;
 
     /// Asks the user a question.
-    async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> String;
+    async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> Option<String>;
 
     /// Asks the user to choose one choice.
     /// 
@@ -87,7 +89,7 @@ pub trait UserInterface: Send + Sync {
     /// 
     /// # Returns
     /// The index of `choices`.
-    async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> usize;
+    async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> Option<usize>;
 
     /// Shows a information to the user.
     async fn info(&self, msg: &str, title: &str);
@@ -105,7 +107,7 @@ pub struct StdioUserInterface;
 
 #[async_trait]
 impl UserInterface for StdioUserInterface {
-    async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> HashMap<String, String> {
+    async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> Option<HashMap<String, String>> {
         if msg.is_some() {
             println!("{}", msg.unwrap());
         }
@@ -115,19 +117,19 @@ impl UserInterface for StdioUserInterface {
             println!("{v}: ");
             res.insert(k.to_string(), stdin.next().await.unwrap().unwrap());
         }
-        res
+        Some(res)
     }
-    async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> String {
+    async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> Option<String> {
         if msg.is_some() {
             println!("{}", msg.unwrap());
         }
         println!("{question}: ");
         let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
-        return stdin.next().await
-            .unwrap().unwrap().to_string();
+        return Some(stdin.next().await
+            .unwrap().unwrap().to_string());
     }
 
-    async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> usize {
+    async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> Option<usize> {
         println!("{msg}");
         let mut index = 0;
         for i in choices {
@@ -136,7 +138,7 @@ impl UserInterface for StdioUserInterface {
         }
         println!("Please choose: ");
         let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
-        return stdin.next().await.unwrap().unwrap().parse().unwrap();
+        return Some(stdin.next().await.unwrap().unwrap().parse().unwrap());
     }
 
     async fn info(&self, msg: &str, title: &str) {
@@ -240,15 +242,37 @@ impl LauncherContext {
     }
 
     /// Get one [MinecraftInstallation] by name in the `root_path`.
-    pub async fn get_installation(&self, name: &str) -> Option<MinecraftInstallation> {
+    pub async fn get_installation(&self, name: &str) -> Option<MinecraftInstallation<'_>> {
         let version_dir = &*(&self.root_path / "versions" / name);
         let meta = fs::metadata(version_dir).await;
         if meta.is_err() || !meta.unwrap().is_dir() {
             return None;
         }
         let json = fs::read(version_dir / (name.to_string() + ".json")).await.ok()?;
-        let json: VersionJSON = serde_json::from_slice(&json).ok()?;
+        let json = serde_json::from_slice(&json).ok()?;
+        let json: VersionJSON = self.resolve_inherits_from(json).await;
         Some(MinecraftInstallation::new(self, json, name, None))
+    }
+
+    async fn resolve_inherits_from(&self, base: VersionJSON) -> VersionJSON {
+        let mut current = base;
+        while let Some(father) = &current.get_base().inherits_from {
+            let version_dir = &*(&self.root_path / "versions" / father);
+            let father = fs::read(version_dir / (father.to_string() + ".json")).await.ok();
+            if let None = father {
+                return current;
+            }
+            let father = serde_json::from_slice(&father.unwrap());
+            if let Err(_) = father {
+                return current;
+            }
+            current = if let Result::Ok(current) = merge_version_json(&father.unwrap(), &current) {
+                current
+            } else {
+                return current;
+            };
+        }
+        return current;
     }
 
     /// Set a new `root_path`.

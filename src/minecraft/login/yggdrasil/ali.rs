@@ -59,16 +59,16 @@ impl YggdrasilAccount for AuthlibInjectorAccount {
         self.data = Some(data);
     }
 
-    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> String {
-        let api_url = launcher.ui.ask_user_one(&t!("accounts.authlib_injector.apiurl"), None).await; // TODO: i18n
+    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> Result<String> {
+        let api_url = launcher.ui.ask_user_one(&t!("accounts.authlib_injector.apiurl"), None).await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
         let res = launcher.http_client.get(&api_url).send().await;
         if res.is_err() {
-            return api_url;
+            return Ok(api_url);
         }
         if let Ok(s) = res.unwrap().headers()["x-authlib-injector-api-location"].to_str() {
-            return s.to_string();
+            return Ok(s.to_string());
         }
-        return api_url;
+        return Ok(api_url);
     }
 
     async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()> {

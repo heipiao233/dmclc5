@@ -1,6 +1,6 @@
 use std::{ffi::OsString, fmt::Display};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -59,11 +59,11 @@ impl YggdrasilAccount for MinecraftUniversalLoginAccount {
         self.data = Some(data);
     }
 
-    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> String {
+    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> Result<String> {
         if self.server_id.is_none() {
-            self.server_id = Some(launcher.ui.ask_user_one(&t!("accounts.minecraft_universal_login.serverID"), None).await);
+            self.server_id = Some(launcher.ui.ask_user_one(&t!("accounts.minecraft_universal_login.serverID"), None).await.ok_or(anyhow!("User cancelled"))?);
         }
-        format!("https://auth.mc-user.com:233/{}", self.server_id.as_ref().unwrap())
+        Ok(format!("https://auth.mc-user.com:233/{}", self.server_id.as_ref().unwrap()))
     }
 
     async fn prepare_launch(&self, version_launch_dir: &BetterPath, _: &LauncherContext) -> Result<()> {
