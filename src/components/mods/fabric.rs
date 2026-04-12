@@ -1,8 +1,7 @@
 //! Implementation of [ModLoader] for Fabric Loader.
 
-use std::{collections::HashMap, fs::File, io::{Read, Seek}};
+use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}};
 
-use acc_reader::AccReader;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use versions::{Requirement, Versioning};
@@ -137,41 +136,53 @@ pub struct FabricModLoader {
 }
 
 impl FabricModLoader {
-    fn get_mods_in_reader<R: Read + Seek>(&self, read: R) -> Result<Vec<ModInfo>> {
+    fn get_mods_in_reader<R: Read + Seek>(&self, mut read: R) -> Result<Vec<ModInfo>> {
         let mut res = vec![];
-        let mut archive = ZipArchive::new(read)?;
-        let mut mod_json = String::new();
-        archive.by_name("fabric.mod.json")?.read_to_string(&mut mod_json)?;
-        let mod_json: FabricModJson = serde_json::from_str(&json_newline_transform(&mod_json))?;
-        res.push(ModInfo {
-            name: mod_json.name,
-            id: mod_json.id,
-            version: Some(Versioning::new(mod_json.version).unwrap()),
-            desc: mod_json.description,
-            license: mod_json.license.unwrap_or(Licenses::One("All Rights Reserved".to_string())).joined(),
-            depends: mod_json.depends.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
-            recommends: mod_json.recommends.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
-            suggests: mod_json.suggests.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
-            conflicts: mod_json.conflicts.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
-            breaks: mod_json.breaks.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
-        });
-        for i in mod_json.provides.iter().flatten() {
+        let mut jar_data = Vec::new();
+        read.read_to_end(&mut jar_data)?;
+        let mut stack: Vec<Cursor<Vec<u8>>> = vec![Cursor::new(jar_data)];
+        
+        while let Some(current_read) = stack.pop() {
+            let mut archive = ZipArchive::new(current_read)?;
+            let mut mod_json = String::new();
+            archive.by_name("fabric.mod.json")?.read_to_string(&mut mod_json)?;
+            let mod_json: FabricModJson = serde_json::from_str(&json_newline_transform(&mod_json))?;
             res.push(ModInfo {
-                name: None,
-                id: i.clone(),
-                version: None,
-                desc: None,
-                license: res[0].license.clone(),
-                depends: vec![],
-                recommends: vec![],
-                suggests: vec![],
-                conflicts: vec![],
-                breaks: vec![]
+                name: mod_json.name,
+                id: mod_json.id,
+                version: Some(Versioning::new(mod_json.version).unwrap()),
+                desc: mod_json.description,
+                license: mod_json.license.unwrap_or(Licenses::One("All Rights Reserved".to_string())).joined(),
+                depends: mod_json.depends.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
+                recommends: mod_json.recommends.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
+                suggests: mod_json.suggests.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
+                conflicts: mod_json.conflicts.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
+                breaks: mod_json.breaks.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
             });
+            for i in mod_json.provides.iter().flatten() {
+                res.push(ModInfo {
+                    name: None,
+                    id: i.clone(),
+                    version: None,
+                    desc: None,
+                    license: res[0].license.clone(),
+                    depends: vec![],
+                    recommends: vec![],
+                    suggests: vec![],
+                    conflicts: vec![],
+                    breaks: vec![]
+                });
+            }
+
+            for jar_info in mod_json.jars.into_iter().flatten() {
+                if let Ok(mut jar_entry) = archive.by_name(&jar_info.file) {
+                    let mut jar_data = Vec::new();
+                    jar_entry.read_to_end(&mut jar_data)?;
+                    stack.push(Cursor::new(jar_data));
+                }
+            }
         }
-        for i in mod_json.jars.iter().flatten() {
-            res.append(&mut self.get_mods_in_reader(AccReader::new(archive.by_name(&i.file)?))?);
-        }
+        
         Ok(res)
     }
 }

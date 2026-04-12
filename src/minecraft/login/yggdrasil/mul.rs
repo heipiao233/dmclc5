@@ -28,7 +28,7 @@ impl Display for MinecraftUniversalLoginAccount {
 pub(crate) struct MinecraftUniversalLoginAccountConstructor;
 
 impl AccountConstructor for MinecraftUniversalLoginAccountConstructor {
-    fn new(&self) -> Box<dyn Account> {
+    fn create_empty(&self) -> Box<dyn Account> {
         Box::new(MinecraftUniversalLoginAccount {
             data: None,
             server_id: None

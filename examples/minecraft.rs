@@ -44,7 +44,7 @@ async fn real_main() -> Result<()> {
     };
     let mc = vers.find_by_id("1.20.6").unwrap().install(&launcher, "1.20.6", tx);
     let mc = tokio::join!(message_handler, mc).1?;
-    let account = &mut *launcher.account_types["offline"].new();
+    let account = &mut *launcher.account_types["offline"].create_empty();
     account.login(&launcher).await?;
     if let Some(c) = &mc.extra_data.before_command {
         let command: Vec<&str> = c.split(" ").collect();

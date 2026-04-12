@@ -1,5 +1,4 @@
 /// Things about downloading.
-
 use std::{io::Write, marker::PhantomData, ops::Add, os::unix::fs::MetadataExt, sync::Arc, time::Duration};
 
 use anyhow::Result;
@@ -7,7 +6,8 @@ use async_fetcher::{FetchEvent, Fetcher, Source};
 use futures_util::{io::AllowStdIo, StreamExt};
 
 use reqwest::IntoUrl;
-use sha1::{digest::{generic_array::ArrayLength, OutputSizeUser}, Digest, Sha1};
+use sha1::{digest::OutputSizeUser, Digest, Sha1};
+use sha2::digest::generic_array::ArrayLength;
 use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
@@ -15,7 +15,7 @@ use crate::minecraft::schemas::Resource;
 use super::BetterPath;
 
 /// Check the hash of a file.
-/// 
+///
 /// # Arguments
 /// * `T` - A hash algorithm like [Sha1] or [Sha256](sha2::Sha256)
 pub async fn check_hash<T: Digest + Write>(path: &BetterPath, digest: &str, size: usize, _: PhantomData<T>) -> bool
@@ -82,8 +82,8 @@ pub async fn download_all(
     }
     let sources: Vec<_> = futures_util::future::join_all(check_futures).await
         .into_iter()
-        .filter(|v|v.is_some())
-        .map(|v|v.unwrap()).collect();
+        .flatten()
+        .collect();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let mut fetcher = Fetcher::default()
         .events(tx)
@@ -111,13 +111,13 @@ pub async fn download_all(
 }
 
 fn mirrored(url: String, mirror: String) -> String {
-    return url
+    url
         .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
         .replace("libraries.minecraft.net", &format!("{mirror}/maven"))
         .replace("files.minecraftforge.net", &mirror)
         .replace("maven.fabricmc.net", &mirror)
         .replace("maven.neoforged.net/releases/net/neoforged/neoforge", &format!("{mirror}/maven/net/neoforged/neoforge"))
-        .replace("resources.download.minecraft.net", &format!("{mirror}/assets"));
+        .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
 }
 
 /// Read the `url` into the `writer`.
@@ -144,7 +144,7 @@ pub async fn download<URL: IntoUrl>(url: URL, path: &BetterPath) -> Result<()> {
 }
 
 /// Download the `url` into the `path`, and return the content.
-pub async fn download_txt<'o, URL: IntoUrl>(url: URL, path: &BetterPath) -> Result<String> {
+pub async fn download_txt<URL: IntoUrl>(url: URL, path: &BetterPath) -> Result<String> {
     let txt = reqwest::get(url).await?.text().await?;
     if let Some(p) = path.0.parent() {
         fs::create_dir_all(p).await?;

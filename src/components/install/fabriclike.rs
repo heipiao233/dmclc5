@@ -70,10 +70,10 @@ async fn quilt_get_loader(version: &str, launcher: &LauncherContext) -> Result<V
     }
     loader.builtin_mods = Some(loader.get_mods_in_file(&path).ok().into_iter().flatten().collect());
 
-    let fabric_loader = FabricModLoader {
+    let quilt_loader = QuiltModLoader {
         builtin_mods: None
     };
-    Ok(vec![Box::new(loader), Box::new(fabric_loader)])
+    Ok(vec![Box::new(loader), Box::new(quilt_loader)])
 }
 
 #[cfg(feature = "mod_loaders")]

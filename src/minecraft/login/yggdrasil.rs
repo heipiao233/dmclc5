@@ -59,7 +59,7 @@ pub trait YggdrasilAccount: Send + Sync + Display {
         if let Some(data) = self.get_data() {
             Ok(data.api_url.clone())
         } else {
-            self.ask_api_url(&launcher).await
+            self.ask_api_url(launcher).await
         }
     }
     /// Prepare for launch.
@@ -79,8 +79,8 @@ impl <T: YggdrasilAccount> Account for T {
         if !self.is_initialized() {
             return false;
         }
-        let api_url = self.get_api_url(&launcher).await;
-        if let Err(_) = api_url {
+        let api_url = self.get_api_url(launcher).await;
+        if api_url.is_err() {
             return false;
         }
         let api_url = api_url.unwrap();
@@ -101,7 +101,7 @@ impl <T: YggdrasilAccount> Account for T {
             ("username", "Username"),
             ("password", "Password")
         ], None).await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
-        let api_url = self.get_api_url(&launcher).await?;
+        let api_url = self.get_api_url(launcher).await?;
         let http = &launcher.http_client;
 
         let meta: Value = http.get(&api_url).send().await?.json().await?;
@@ -130,7 +130,7 @@ impl <T: YggdrasilAccount> Account for T {
             server_name,
             client_token: auth_res.client_token,
             name: profile.name.clone(),
-            uuid: profile.id.clone(),
+            uuid: profile.id,
             at: auth_res.access_token
         });
         Ok(())
@@ -141,11 +141,11 @@ impl <T: YggdrasilAccount> Account for T {
     }
 
     async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()> {
-        YggdrasilAccount::prepare_launch(self, version_launch_dir, &launcher).await
+        YggdrasilAccount::prepare_launch(self, version_launch_dir, launcher).await
     }
 
     async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>> {
-        YggdrasilAccount::get_launch_jvmargs(self, mc, &launcher).await
+        YggdrasilAccount::get_launch_jvmargs(self, mc, launcher).await
     }
 
     async fn get_launch_game_args(&mut self, _: &LauncherContext) -> HashMap<String, String> {

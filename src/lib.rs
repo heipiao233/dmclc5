@@ -1,6 +1,4 @@
 #![warn(missing_docs)]
-#![feature(iter_intersperse)]
-#![feature(iter_array_chunks)]
 
 //! A Minecraft launcher library.
 
@@ -69,11 +67,11 @@ pub struct LauncherContext {
 #[async_trait]
 pub trait UserInterface: Send + Sync {
     /// Asks the user some questions.
-    /// 
+    ///
     /// # Arguments
     /// * `questions` - A vector of questions. The first element in the tuple is the keys of the return value. and the second is what you should show to your user.
     /// * `msg` - An optional message to user.
-    /// 
+    ///
     /// # Returns
     /// A HashMap. The keys are the first element of each item in the argument `questions`, the values is the answers from the user for each questions.
     async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> Option<HashMap<String, String>>;
@@ -82,10 +80,10 @@ pub trait UserInterface: Send + Sync {
     async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> Option<String>;
 
     /// Asks the user to choose one choice.
-    /// 
+    ///
     /// # Arguments
     /// * `msg` - The question.
-    /// 
+    ///
     /// # Returns
     /// The index of `choices`.
     async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> Option<usize>;
@@ -107,8 +105,8 @@ pub struct StdioUserInterface;
 #[async_trait]
 impl UserInterface for StdioUserInterface {
     async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> Option<HashMap<String, String>> {
-        if msg.is_some() {
-            println!("{}", msg.unwrap());
+        if let Some(msg) = msg {
+            println!("{msg}");
         }
         let mut res = HashMap::<String, String>::new();
         let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
@@ -119,8 +117,8 @@ impl UserInterface for StdioUserInterface {
         Some(res)
     }
     async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> Option<String> {
-        if msg.is_some() {
-            println!("{}", msg.unwrap());
+        if let Some(msg) = msg {
+            println!("{msg}");
         }
         println!("{question}: ");
         let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
@@ -130,10 +128,8 @@ impl UserInterface for StdioUserInterface {
 
     async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> Option<usize> {
         println!("{msg}");
-        let mut index = 0;
-        for i in choices {
+        for (index, i) in choices.iter().enumerate() {
             println!("{index}. {i}");
-            index += 1;
         }
         println!("Please choose: ");
         let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
@@ -154,7 +150,7 @@ impl UserInterface for StdioUserInterface {
 impl LauncherContext {
 
     /// Creates a new [LauncherContext].
-    /// 
+    ///
     /// # Arguments
     /// * `root_path` - The `.minecraft` directory.
     #[cfg_attr(feature="msa_auth", doc=r" * `ms_client_id` - The client id for Microsoft auth. See [Microsoft's document](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app).")]
@@ -175,8 +171,8 @@ impl LauncherContext {
                 tokio::fs::create_dir(&root_path / "assets").await?;
             }
         }
-        tokio::fs::File::create(&root_path / "libraries" / "CACHEDIR.TAG").await?.write(CACHEDIR_TAG.as_bytes()).await?;
-        tokio::fs::File::create(&root_path / "assets" / "CACHEDIR.TAG").await?.write(CACHEDIR_TAG.as_bytes()).await?;
+        tokio::fs::File::create(&root_path / "libraries" / "CACHEDIR.TAG").await?.write_all(CACHEDIR_TAG.as_bytes()).await?;
+        tokio::fs::File::create(&root_path / "assets" / "CACHEDIR.TAG").await?.write_all(CACHEDIR_TAG.as_bytes()).await?;
         #[allow(unused_mut)]
         let mut ctx = LauncherContext {
             root_path,
@@ -216,7 +212,7 @@ impl LauncherContext {
         };
         Ok(ctx)
     }
-    
+
     /// List the names of minecraft installations in the `root_path`.
     pub async fn list_installations(&self) -> Result<Vec<String>> {
         let version_dir = &*(&self.root_path / "versions");
@@ -228,14 +224,9 @@ impl LauncherContext {
                 continue;
             }
             let json_path = version_dir / dir.file_name() / osstr_concat(&dir.file_name(), &".json".to_string());
-            let m = std::fs::metadata(&json_path);
-            if let Err(_) = m {
-                continue;
+            if let Result::Ok(meta) = std::fs::metadata(&json_path) && meta.is_file() {
+                ret.push(dir.file_name().to_string_lossy().to_string());
             }
-            if !m.unwrap().is_file() {
-                continue;
-            }
-            ret.push(dir.file_name().to_string_lossy().to_string());
         }
         Ok(ret)
     }
@@ -258,11 +249,11 @@ impl LauncherContext {
         while let Some(father) = &current.get_base().inherits_from {
             let version_dir = &*(&self.root_path / "versions" / father);
             let father = fs::read(version_dir / (father.to_string() + ".json")).await.ok();
-            if let None = father {
+            if father.is_none() {
                 return current;
             }
             let father = serde_json::from_slice(&father.unwrap());
-            if let Err(_) = father {
+            if father.is_err() {
                 return current;
             }
             current = if let Result::Ok(current) = merge_version_json(&father.unwrap(), &current) {
@@ -271,14 +262,14 @@ impl LauncherContext {
                 return current;
             };
         }
-        return current;
+        current
     }
 
     /// Set a new `root_path`.
     pub fn set_root_path(&mut self, root_path: &Path) -> Result<()> {
         self.root_path = BetterPath(root_path.to_path_buf().canonicalize()?);
-        std::fs::File::create(&self.root_path / "libraries" / "CACHEDIR.TAG")?.write(CACHEDIR_TAG.as_bytes())?;
-        std::fs::File::create(&self.root_path / "assets" / "CACHEDIR.TAG")?.write(CACHEDIR_TAG.as_bytes())?;
+        std::fs::File::create(&self.root_path / "libraries" / "CACHEDIR.TAG")?.write_all(CACHEDIR_TAG.as_bytes())?;
+        std::fs::File::create(&self.root_path / "assets" / "CACHEDIR.TAG")?.write_all(CACHEDIR_TAG.as_bytes())?;
         Ok(())
     }
 }

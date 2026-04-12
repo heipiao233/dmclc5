@@ -91,7 +91,7 @@ pub trait ContentService: Send + Sync {
     /// Search for contents.
     async fn search_content(
         &self,
-        name: String,
+        name: &str,
         skip: usize,
         limit: usize,
         kind: ContentType,

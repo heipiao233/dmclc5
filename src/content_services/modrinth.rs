@@ -371,7 +371,7 @@ impl ContentVersion for ModrinthContentVersion {
 impl ContentService for ModrinthContentService {
     async fn search_content(
         &self,
-        name: String,
+        name: &str,
         skip: usize,
         limit: usize,
         kind: super::ContentType,
@@ -404,7 +404,7 @@ impl ContentService for ModrinthContentService {
             facets.push(loaders);
         }
         let results: SearchResults = launcher.http_client.get("https://api.modrinth.com/v2/search").query(&[
-            ("query", name),
+            ("query", name.to_string()),
             ("facets", serde_json::to_string(&facets).unwrap()),
             ("offset", skip.to_string()),
             ("limit", limit.to_string()),

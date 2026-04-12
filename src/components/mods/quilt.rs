@@ -1,8 +1,7 @@
 //! Implementation of [ModLoader] for Quilt Loader.
 
-use std::{collections::HashMap, fs::File, io::{Read, Seek}};
+use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}};
 
-use acc_reader::AccReader;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use versions::Versioning;
@@ -158,56 +157,68 @@ pub struct QuiltModLoader {
 }
 
 impl QuiltModLoader {
-    fn get_mods_in_reader<R: Read + Seek>(&self, read: R) -> Result<Vec<ModInfo>> {
+    fn get_mods_in_reader<R: Read + Seek>(&self, mut read: R) -> Result<Vec<ModInfo>> {
         let mut res = vec![];
-        let mut archive = ZipArchive::new(read)?;
-        let mut mod_json = String::new();
-        archive.by_name("quilt.mod.json")?.read_to_string(&mut mod_json)?;
-        let mod_json: QuiltModJsonInner = serde_json::from_str::<QuiltModJson>(&json_newline_transform(&mod_json))?.quilt_loader;
-        let depends = Into::<Vec<DependencyObject>>::into(mod_json.depends.clone()).iter()
-            .filter(|v|!v.optional)
-            .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
-        let recommends = Into::<Vec<DependencyObject>>::into(mod_json.depends).iter()
-            .filter(|v|v.optional)
-            .map(Clone::clone).map(Into::into)
-            .collect::<Vec<_>>();
+        let mut jar_data = Vec::new();
+        read.read_to_end(&mut jar_data)?;
+        let mut stack: Vec<Cursor<Vec<u8>>> = vec![Cursor::new(jar_data)];
+        
+        while let Some(current_read) = stack.pop() {
+            let mut archive = ZipArchive::new(current_read)?;
+            let mut mod_json = String::new();
+            archive.by_name("quilt.mod.json")?.read_to_string(&mut mod_json)?;
+            let mod_json: QuiltModJsonInner = serde_json::from_str::<QuiltModJson>(&json_newline_transform(&mod_json))?.quilt_loader;
+            let depends = Into::<Vec<DependencyObject>>::into(mod_json.depends.clone()).iter()
+                .filter(|v|!v.optional)
+                .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
+            let recommends = Into::<Vec<DependencyObject>>::into(mod_json.depends).iter()
+                .filter(|v|v.optional)
+                .map(Clone::clone).map(Into::into)
+                .collect::<Vec<_>>();
 
-        let breaks = Into::<Vec<DependencyObject>>::into(mod_json.breaks.clone()).iter()
-            .filter(|v|!v.optional)
-            .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
-        let conflicts = Into::<Vec<DependencyObject>>::into(mod_json.breaks).iter()
-            .filter(|v|v.optional)
-            .map(Clone::clone).map(Into::into)
-            .collect::<Vec<_>>();
-        res.push(ModInfo {
-            name: mod_json.metadata.name,
-            id: mod_json.id,
-            version: Some(Versioning::new(mod_json.version).unwrap()),
-            desc: mod_json.metadata.description,
-            license: mod_json.metadata.license.unwrap_or(Licenses::SingleString("All Rights Reserved".to_string())).to_string(),
-            depends,
-            recommends,
-            suggests: vec![],
-            conflicts,
-            breaks,
-        });
-        for i in mod_json.provides {
+            let breaks = Into::<Vec<DependencyObject>>::into(mod_json.breaks.clone()).iter()
+                .filter(|v|!v.optional)
+                .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
+            let conflicts = Into::<Vec<DependencyObject>>::into(mod_json.breaks).iter()
+                .filter(|v|v.optional)
+                .map(Clone::clone).map(Into::into)
+                .collect::<Vec<_>>();
             res.push(ModInfo {
-                name: None,
-                id: i.id.clone(),
-                version: Some(Versioning::new(i.version).unwrap()),
-                desc: None,
-                license: res[0].license.clone(),
-                depends: vec![],
-                recommends: vec![],
+                name: mod_json.metadata.name,
+                id: mod_json.id,
+                version: Some(Versioning::new(mod_json.version).unwrap()),
+                desc: mod_json.metadata.description,
+                license: mod_json.metadata.license.unwrap_or(Licenses::SingleString("All Rights Reserved".to_string())).to_string(),
+                depends,
+                recommends,
                 suggests: vec![],
-                conflicts: vec![],
-                breaks: vec![]
+                conflicts,
+                breaks,
             });
+            for i in mod_json.provides {
+                res.push(ModInfo {
+                    name: None,
+                    id: i.id.clone(),
+                    version: Some(Versioning::new(i.version).unwrap()),
+                    desc: None,
+                    license: res[0].license.clone(),
+                    depends: vec![],
+                    recommends: vec![],
+                    suggests: vec![],
+                    conflicts: vec![],
+                    breaks: vec![]
+                });
+            }
+
+            for jar_info in mod_json.jars.into_iter() {
+                if let Ok(mut jar_entry) = archive.by_name(&jar_info) {
+                    let mut jar_data = Vec::new();
+                    jar_entry.read_to_end(&mut jar_data)?;
+                    stack.push(Cursor::new(jar_data));
+                }
+            }
         }
-        for i in mod_json.jars {
-            res.append(&mut self.get_mods_in_reader(AccReader::new(archive.by_name(&i)?))?);
-        }
+        
         Ok(res)
     }
 }

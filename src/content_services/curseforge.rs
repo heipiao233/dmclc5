@@ -328,7 +328,7 @@ impl ContentVersion for CurseforgeModFile {
 impl ContentService for CurseforgeContentService {
     async fn search_content(
         &self,
-        name: String,
+        name: &str,
         skip: usize,
         limit: usize,
         kind: super::ContentType,
@@ -342,7 +342,7 @@ impl ContentService for CurseforgeContentService {
         let mut query = vec![
             ("gameId", "432".to_string()),
             ("classId", CONTENT_TYPE_TO_CURSEFORGE[&kind].to_string()),
-            ("searchFilter", name),
+            ("searchFilter", name.to_string()),
             ("index", skip.to_string()),
             ("pageSize", limit.to_string()),
             ("sortField", (sort_field + 1).to_string()),

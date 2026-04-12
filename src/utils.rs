@@ -62,10 +62,8 @@ pub fn get_bits() -> String {
 
 /// Check one [EnvRule].
 pub fn check_rule(rule: &EnvRule) -> bool {
-    if let Some(os) = &rule.os {
-        if let Some(os) = &os.name {
-            return get_os() == *os;
-        }
+    if let Some(os) = &rule.os && let Some(os) = &os.name {
+        return get_os() == *os;
     }
 
     rule.features.is_none() // No features support currently
@@ -105,33 +103,33 @@ where OsString: From<A> {
 /// Merge two [VersionJSON]s with the same version.
 pub fn merge_version_json(a: &VersionJSON, b: &VersionJSON) -> Result<VersionJSON> {
     let mut c = a.get_base().clone();
-    c.libraries = b.get_base().libraries.clone().into_iter().chain(c.libraries.into_iter()).collect();
+    c.libraries = b.get_base().libraries.clone().into_iter().chain(c.libraries).collect();
     c.main_class = b.get_base().main_class.clone();
     match a {
         VersionJSON::Old { base: _, minecraft_arguments: _ } => {
             if let VersionJSON::Old {base: _, minecraft_arguments} = b {
                 return Ok(VersionJSON::Old { base: c, minecraft_arguments: minecraft_arguments.to_string() });
             }
-            return Result::Err(anyhow!("try to merge different kinds of version json!").into()); // TODO: i18n
+            Result::Err(anyhow!("try to merge different kinds of version json!")) // TODO: i18n
         },
         VersionJSON::New { base: _, arguments: arguments_a } => {
             if let VersionJSON::New {base: _, arguments: arguments_b} = b {
                 let mut new_game = arguments_a.game.clone();
-                if new_game.is_none() {
+                if let Some(b_game) = arguments_b.game.clone() && let Some(new_game) = &mut new_game {
+                    new_game.extend(b_game);
+                } else {
                     new_game = arguments_b.game.clone();
-                } else if let Some(b_game) = arguments_b.game.clone() {
-                    new_game.as_mut().unwrap().extend(b_game);
                 }
 
                 let mut new_jvm = arguments_a.jvm.clone();
-                if new_jvm.is_none() {
+                if let Some(b_jvm) = arguments_b.jvm.clone() && let Some(new_jvm) = &mut new_jvm {
+                    new_jvm.extend(b_jvm);
+                } else {
                     new_jvm = arguments_b.jvm.clone();
-                } else if let Some(b_jvm) = arguments_b.jvm.clone() {
-                    new_jvm.as_mut().unwrap().extend(b_jvm);
                 }
                 return Ok(VersionJSON::New { base: c, arguments: Arguments { game: new_game, jvm: new_jvm } });
             }
-            return Result::Err(anyhow!("try to merge different kinds of version json!").into()); // TODO: i18n
+            Result::Err(anyhow!("try to merge different kinds of version json!")) // TODO: i18n
         },
     }
 }
@@ -202,7 +200,7 @@ pub fn deserialize_maven_version_range<'de, D: Deserializer<'de>>(deserializer: 
     struct StructVisitor;
     impl <'de> Visitor<'de> for StructVisitor {
         type Value = Vec<VersionBound>;
-    
+
         fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
             formatter.write_str("A Maven Version Range")
         }
@@ -217,7 +215,7 @@ pub fn deserialize_maven_version_range<'de, D: Deserializer<'de>>(deserializer: 
 }
 
 /// Converts silly newlines to "\\n" in JSONs.
-pub fn json_newline_transform(source: &String) -> String {
+pub fn json_newline_transform(source: &str) -> String {
     let mut result = vec![];
     let mut is_str = 0;
     for  i in source.chars() {
@@ -251,5 +249,5 @@ pub fn json_newline_transform(source: &String) -> String {
             }
         }
     }
-    return result.into_iter().collect();
+    result.into_iter().collect()
 }

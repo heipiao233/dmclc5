@@ -1,8 +1,7 @@
 //! Implementation of [ModLoader] for Forge after 1.14 and NeoForge.
 
-use std::{collections::HashMap, fs::File, io::{Read, Seek}};
+use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}};
 
-use acc_reader::AccReader;
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use versions::Versioning;
@@ -105,61 +104,71 @@ fn get_impl_version<R: Read + Seek>(file: &mut ZipArchive<R>) -> Result<String> 
 }
 
 impl NewerForgeLikeModLoader {
-    fn get_mods_in_reader<R: Read + Seek>(&self, read: R) -> Result<Vec<ModInfo>> {
+    fn get_mods_in_reader<R: Read + Seek>(&self, mut read: R) -> Result<Vec<ModInfo>> {
         let mut res = vec![];
-        let mut archive = ZipArchive::new(read)?;
-        let mut mod_toml = String::new();
-        let mut impl_version = String::new();
-        archive.by_name(&format!("META-INF/{}", self.mods_toml_name))?.read_to_string(&mut mod_toml)?;
-        let mod_toml: ModsToml = toml::from_str(&mod_toml)?;
-        for i in mod_toml.mods {
-            let empty = vec![];
-            let deps = mod_toml.dependencies.get(&i.mod_id).unwrap_or(&empty).iter().filter(|v|v.side != Side::Server);
-            let depends = deps.clone()
-                .filter(|v|v.mandatory || v.r#type == Some(DependencyType::Required))
-                .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
-            let recommends = deps.clone()
-                .filter(|v|(v.r#type == None && !v.mandatory) || v.r#type == Some(DependencyType::Optional))
-                .map(Clone::clone).map(Into::into)
-                .collect::<Vec<_>>();
+        let mut jar_data = Vec::new();
+        read.read_to_end(&mut jar_data)?;
+        let mut stack: Vec<Cursor<Vec<u8>>> = vec![Cursor::new(jar_data)];
 
-            let breaks = deps.clone()
-                .filter(|v|v.r#type == Some(DependencyType::Discouraged))
-                .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
-            let conflicts = deps.clone()
-                .filter(|v|v.r#type == Some(DependencyType::Discouraged))
-                .map(Clone::clone).map(Into::into)
-                .collect::<Vec<_>>();
-            let mut version = i.version;
-            if version == "${file.jarVersion}" {
-                if !impl_version.is_empty() {
-                    version = impl_version.clone();
-                } else {
-                    version = get_impl_version(&mut archive)?;
-                    impl_version = version.clone();
+        while let Some(file) = stack.pop() {
+            let mut archive = ZipArchive::new(file)?;
+            let mut mod_toml = String::new();
+            let mut impl_version = String::new();
+            archive.by_name(&format!("META-INF/{}", self.mods_toml_name))?.read_to_string(&mut mod_toml)?;
+            let mod_toml: ModsToml = toml::from_str(&mod_toml)?;
+            for i in mod_toml.mods {
+                let empty = vec![];
+                let deps = mod_toml.dependencies.get(&i.mod_id).unwrap_or(&empty).iter().filter(|v|v.side != Side::Server);
+                let depends = deps.clone()
+                    .filter(|v|v.mandatory || v.r#type == Some(DependencyType::Required))
+                    .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
+                let recommends = deps.clone()
+                    .filter(|v|(v.r#type == None && !v.mandatory) || v.r#type == Some(DependencyType::Optional))
+                    .map(Clone::clone).map(Into::into)
+                    .collect::<Vec<_>>();
+
+                let breaks = deps.clone()
+                    .filter(|v|v.r#type == Some(DependencyType::Discouraged))
+                    .map(Clone::clone).map(Into::into).collect::<Vec<_>>();
+                let conflicts = deps.clone()
+                    .filter(|v|v.r#type == Some(DependencyType::Discouraged))
+                    .map(Clone::clone).map(Into::into)
+                    .collect::<Vec<_>>();
+                let mut version = i.version;
+                if version == "${file.jarVersion}" {
+                    if !impl_version.is_empty() {
+                        version = impl_version.clone();
+                    } else {
+                        version = get_impl_version(&mut archive)?;
+                        impl_version = version.clone();
+                    }
+                }
+                res.push(ModInfo {
+                    name: i.display_name,
+                    id: i.mod_id,
+                    version: Some(Versioning::new(version).unwrap()),
+                    desc: i.description,
+                    license: mod_toml.license.clone(),
+                    depends,
+                    recommends,
+                    suggests: vec![],
+                    conflicts,
+                    breaks
+                });
+            }
+            let jij_jars = if let Ok(mut f) = archive.by_name("META-INF/jarjar/metadata.json") {
+                let mut jij = String::new();
+                f.read_to_string(&mut jij)?;
+                let jij: JIJInfo = serde_json::from_str(&jij)?;
+                jij.jars
+            } else { vec![] };
+            for i in jij_jars {
+                if let Ok(mut jar_entry) = archive.by_name(&i.path) {
+                    let mut jar_data = Vec::new();
+                    jar_entry.read_to_end(&mut jar_data)?;
+                    stack.push(Cursor::new(jar_data));
                 }
             }
-            res.push(ModInfo {
-                name: i.display_name,
-                id: i.mod_id,
-                version: Some(Versioning::new(version).unwrap()),
-                desc: i.description,
-                license: mod_toml.license.clone(),
-                depends,
-                recommends,
-                suggests: vec![],
-                conflicts,
-                breaks
-            });
-        }
-        let jij_jars = if let Ok(mut f) = archive.by_name("META-INF/jarjar/metadata.json") {
-            let mut jij = String::new();
-            f.read_to_string(&mut jij)?;
-            let jij: JIJInfo = serde_json::from_str(&jij)?;
-            jij.jars
-        } else { vec![] };
-        for i in jij_jars {
-            res.append(&mut self.get_mods_in_reader(AccReader::new(archive.by_name(&i.path)?))?);
         }
         Ok(res)
     }

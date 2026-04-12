@@ -44,7 +44,7 @@ pub trait Account: Display + Send + Sync {
 /// A constructor for [Account].
 pub trait AccountConstructor: Send + Sync {
     /// Create an empty [Account].
-    fn new(&self) -> Box<dyn Account>;
+    fn create_empty(&self) -> Box<dyn Account>;
     /// Create an [Account] from serialized data.
     fn deserialize(&self, de: &mut dyn erased_serde::Deserializer) -> Option<Box<dyn Account>>;
 }
@@ -56,7 +56,7 @@ struct OfflineAccount(Option<String>);
 pub(crate) struct OfflineAccountConstructor;
 
 impl AccountConstructor for OfflineAccountConstructor {
-    fn new(&self) -> Box<dyn Account> {
+    fn create_empty(&self) -> Box<dyn Account> {
         Box::new(OfflineAccount(None))
     }
 

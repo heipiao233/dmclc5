@@ -30,7 +30,7 @@ impl Display for AuthlibInjectorAccount {
 pub(crate) struct AuthlibInjectorAccountConstructor;
 
 impl AccountConstructor for AuthlibInjectorAccountConstructor {
-    fn new(&self) -> Box<dyn Account> {
+    fn create_empty(&self) -> Box<dyn Account> {
         Box::new(AuthlibInjectorAccount {
             data: None
         })
