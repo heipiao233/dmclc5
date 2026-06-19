@@ -1,6 +1,6 @@
 //! Things about installing Minecraft.
 
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 
 use anyhow::{Ok, Result};
 use sha1::Sha1;
@@ -41,14 +41,14 @@ impl VersionList {
 
 impl VersionInfo {
     /// Install
-    pub async fn install<'l>(&self, launcher: &'l LauncherContext, name: &str, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<MinecraftInstallation<'l>> {
+    pub async fn install<'l>(&self, launcher: Arc<LauncherContext>, name: &str, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<MinecraftInstallation> {
         let res = reqwest::get(&self.url).await?;
         let text = res.text().await?;
         let obj: VersionJSON = serde_json::from_str(&text)?;
         let version_dir = *(&launcher.root_path / "versions" / name);
         fs::create_dir_all(version_dir.clone()).await?;
         fs::write(&version_dir / format!("{name}.json"), text).await?;
-        let v = MinecraftInstallation::<'l>::new(launcher, obj, name, Some(DMCLCExtraData {
+        let v = MinecraftInstallation::new(launcher, obj, name, Some(DMCLCExtraData {
             version: Some(self.id.clone()),
             components: vec![],
             independent_game_dir: true,
@@ -62,7 +62,7 @@ impl VersionInfo {
     }
 }
 
-impl <'l> MinecraftInstallation<'l> {
+impl MinecraftInstallation {
     /// Download all the broken/missing files for the [MinecraftInstallation].
     pub async fn complete_files(&self, always_download_nohash: bool, fix_client_jar: bool, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         let mut resources: Vec<(Resource, BetterPath)> = Vec::new();
@@ -102,7 +102,7 @@ impl <'l> MinecraftInstallation<'l> {
         }
         Ok(res)
     }
-    
+
     pub(crate) fn install_libraries(&self, libraries: &Vec<Library>, always_download_nohash: bool) -> Result<Vec<(Resource, BetterPath)>> {
         let mut res = vec![];
         let lib_path = &*(&self.launcher.root_path / "libraries");

@@ -7,68 +7,34 @@ use serde_json::Value;
 use sha2::Sha256;
 use base64::prelude::*;
 
-use crate::{minecraft::{login::{Account, AccountConstructor}, version::MinecraftInstallation}, utils::{check_hash, download, BetterPath}, LauncherContext};
+use crate::{LauncherContext, minecraft::{login::{Account, yggdrasil::YggdrasilAccountTrait}, version::MinecraftInstallation}, utils::{BetterPath, check_hash, download}};
 
 use super::{YggdrasilAccount, YggdrasilUserData};
 
 #[derive(Serialize, Deserialize)]
-struct AuthlibInjectorAccount {
+pub(crate) struct AuthlibInjectorAccount {
     #[serde(flatten)]
-    data: Option<YggdrasilUserData>
+    data: YggdrasilUserData
 }
 
 impl Display for AuthlibInjectorAccount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(v) = &self.get_data() {
-            write!(f, "{} ({})", v.name, v.server_name)
-        } else {
-            write!(f, "{} {}", t!("accounts.uninitialized"), t!("accounts.authlib_injector.name"))
-        }
+        write!(f, "{} ({})", self.data.name, self.data.server_name)
     }
 }
 
-pub(crate) struct AuthlibInjectorAccountConstructor;
+impl YggdrasilAccountTrait for AuthlibInjectorAccount {
 
-impl AccountConstructor for AuthlibInjectorAccountConstructor {
-    fn create_empty(&self) -> Box<dyn Account> {
-        Box::new(AuthlibInjectorAccount {
-            data: None
-        })
-    }
-
-    fn deserialize(&self, de: &mut dyn erased_serde::Deserializer) -> Option<Box<dyn Account>> {
-        Some(Box::new(erased_serde::deserialize::<AuthlibInjectorAccount>(de).ok()?))
-    }
-}
-
-#[async_trait]
-impl YggdrasilAccount for AuthlibInjectorAccount {
-    fn is_initialized(&self) -> bool {
-        self.data.is_some()
-    }
-
-    fn get_data(&self) -> &Option<YggdrasilUserData> {
+    fn get_data(&self) -> &YggdrasilUserData {
         &self.data
     }
 
-    fn get_data_mut(&mut self) -> &mut Option<YggdrasilUserData> {
+    fn get_data_mut(&mut self) -> &mut YggdrasilUserData {
         &mut self.data
     }
 
     fn set_data(&mut self, data: YggdrasilUserData) {
-        self.data = Some(data);
-    }
-
-    async fn ask_api_url(&mut self, launcher: &LauncherContext) -> Result<String> {
-        let api_url = launcher.ui.ask_user_one(&t!("accounts.authlib_injector.apiurl"), None).await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
-        let res = launcher.http_client.get(&api_url).send().await;
-        if res.is_err() {
-            return Ok(api_url);
-        }
-        if let Ok(s) = res.unwrap().headers()["x-authlib-injector-api-location"].to_str() {
-            return Ok(s.to_string());
-        }
-        return Ok(api_url);
+        self.data = data;
     }
 
     async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()> {
@@ -84,9 +50,9 @@ impl YggdrasilAccount for AuthlibInjectorAccount {
     }
 
     async fn get_launch_jvmargs(&self, _mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>> {
-        let content = launcher.http_client.get(self.data.as_ref().unwrap().api_url.clone()).send().await?.bytes().await?;
+        let content = launcher.http_client.get(self.data.api_url.clone()).send().await?.bytes().await?;
         Ok(vec![
-            OsString::from(format!("-javaagent:./authlib-injector-latest.jar={}", self.data.as_ref().unwrap().api_url)),
+            OsString::from(format!("-javaagent:./authlib-injector-latest.jar={}", self.data.api_url)),
             OsString::from(format!("-Dauthlibinjector.yggdrasil.prefetched={}", BASE64_STANDARD.encode(content)))
         ])
     }

@@ -2,7 +2,7 @@
 
 //! A Minecraft launcher library.
 
-use std::{collections::HashMap, io::Write, path::Path};
+use std::{collections::HashMap, io::Write, path::Path, sync::Arc};
 
 use anyhow::{Ok, Result};
 use async_trait::async_trait;
@@ -14,7 +14,7 @@ use futures_util::StreamExt;
 use map_macro::hash_map_e;
 #[cfg(feature="msa_auth")]
 use minecraft::login::microsoft::MicrosoftAccountConstructor;
-use minecraft::{login::{yggdrasil::{ali::AuthlibInjectorAccountConstructor, mul::MinecraftUniversalLoginAccountConstructor}, AccountConstructor, OfflineAccountConstructor}, schemas::VersionJSON, version::MinecraftInstallation};
+use minecraft::{schemas::VersionJSON, version::MinecraftInstallation};
 use reqwest::Client;
 use tokio::{fs::{self, create_dir_all}, io::AsyncWriteExt};
 use tokio_util::codec::{FramedRead, LinesCodec};
@@ -50,7 +50,7 @@ pub struct LauncherContext {
     /// A HashMap of [ContentService]s.
     pub content_services: HashMap<String, Box<dyn ContentService>>,
     /// A HashMap of [AccountConstructor]s.
-    pub account_types: HashMap<String, Box<dyn AccountConstructor>>,
+    // pub account_types: HashMap<String, Box<dyn AccountConstructor>>,
     /// Max download retry times.
     pub download_retries: usize,
     /// Max download threads per file.
@@ -192,19 +192,19 @@ impl LauncherContext {
                 "curseforge".to_string() => Box::new(CurseforgeContentService),
                 "modrinth".to_string() => Box::new(ModrinthContentService)
             },
-            #[cfg(feature="msa_auth")]
-            account_types: hash_map_e! {
-                "offline".to_string() => Box::new(OfflineAccountConstructor),
-                "microsoft".to_string() => Box::new(MicrosoftAccountConstructor),
-                "minecraft_universal_login".to_string() => Box::new(MinecraftUniversalLoginAccountConstructor),
-                "authlib_injector".to_string() => Box::new(AuthlibInjectorAccountConstructor)
-            },
-            #[cfg(not(feature="msa_auth"))]
-            account_types: hash_map_e! {
-                "offline".to_string() => Box::new(OfflineAccountConstructor),
-                "minecraft_universal_login".to_string() => Box::new(MinecraftUniversalLoginAccountConstructor),
-                "authlib_injector".to_string() => Box::new(AuthlibInjectorAccountConstructor)
-            },
+            // #[cfg(feature="msa_auth")]
+            // account_types: hash_map_e! {
+            //     "offline".to_string() => Box::new(OfflineAccountConstructor),
+            //     "microsoft".to_string() => Box::new(MicrosoftAccountConstructor),
+            //     "minecraft_universal_login".to_string() => Box::new(MinecraftUniversalLoginAccountConstructor),
+            //     "authlib_injector".to_string() => Box::new(AuthlibInjectorAccountConstructor)
+            // },
+            // #[cfg(not(feature="msa_auth"))]
+            // account_types: hash_map_e! {
+            //     "offline".to_string() => Box::new(OfflineAccountConstructor),
+            //     "minecraft_universal_login".to_string() => Box::new(MinecraftUniversalLoginAccountConstructor),
+            //     "authlib_injector".to_string() => Box::new(AuthlibInjectorAccountConstructor)
+            // },
             download_retries: 5,
             download_threads_per_file: 8,
             download_parallel_files: 8,
@@ -232,7 +232,7 @@ impl LauncherContext {
     }
 
     /// Get one [MinecraftInstallation] by name in the `root_path`.
-    pub async fn get_installation(&self, name: &str) -> Option<MinecraftInstallation<'_>> {
+    pub async fn get_installation(self: Arc<Self>, name: &str) -> Option<MinecraftInstallation> {
         let version_dir = &*(&self.root_path / "versions" / name);
         let meta = fs::metadata(version_dir).await;
         if meta.is_err() || !meta.unwrap().is_dir() {

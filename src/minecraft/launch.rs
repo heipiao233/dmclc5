@@ -7,25 +7,26 @@ use osstrtools_fix::{Bytes, OsStringTools};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use crate::utils::{check_rules, check_rules_no_option, get_bits, get_os, DownloadAllMessage, PATH_DELIMITER};
+use crate::{minecraft::login::AccountTrait, utils::{DownloadAllMessage, PATH_DELIMITER, check_rules, check_rules_no_option, get_bits, get_os}};
 
 use super::{login::Account, schemas::{Argument, Library, OneOrMoreArguments, VersionJSON}, version::MinecraftInstallation};
 
-impl <'a> MinecraftInstallation<'a> {
+impl MinecraftInstallation {
     /// Generate the launch arguments.
     /// Please run [super::version::DMCLCExtraData::before_command] before launching.
     /// Please use [super::version::DMCLCExtraData::with_java].
     /// Please set the work dir to [Self::get_cwd].
-    pub async fn launch_args(&self, account: &mut dyn Account, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<Vec<OsString>> {
-        if !account.is_initialized() || !account.check(self.launcher).await {
-            account.login(self.launcher).await?;
+    pub async fn launch_args(&self, account: &mut Account, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<Vec<OsString>> {
+        if !account.check(&self.launcher).await {
+            todo!()
+            // account.login(self.launcher).await?;
         }
-        account.prepare_launch(&self.version_launch_work_dir, self.launcher).await?;
+        account.prepare_launch(&self.version_launch_work_dir, &self.launcher).await?;
         self.complete_files(false, false, download_channel).await?;
         self.unzip_natives()?;
         let mut args = vec![];
         let cp = self.gen_classpath().join(PATH_DELIMITER.bytes_as_os_str());
-        let account_game_args = account.get_launch_game_args(self.launcher).await;
+        let account_game_args = account.get_launch_game_args(&self.launcher).await;
         match &self.obj {
             VersionJSON::Old { base, minecraft_arguments } => {
                 let mut lib = OsString::from("-Djava.library.path=");
@@ -47,7 +48,7 @@ impl <'a> MinecraftInstallation<'a> {
                     }
                 }
 
-                args.extend(account.get_launch_jvmargs(self, self.launcher).await?);
+                args.extend(account.get_launch_jvmargs(self, &self.launcher).await?);
                 args.extend(self.extra_data.extra_jvm_arguments.clone().into_iter().flatten());
                 args.push(OsString::from(self.obj.get_base().main_class.clone()));
 

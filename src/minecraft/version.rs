@@ -1,6 +1,6 @@
 //! Things about a Minecraft installation.
 
-use std::{ffi::OsString, fs};
+use std::{ffi::OsString, fs, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -46,25 +46,25 @@ pub struct DMCLCExtraData {
 }
 
 /// Represents a Minecraft installation.
-pub struct MinecraftInstallation<'l> {
+pub struct MinecraftInstallation {
     pub(crate) obj: VersionJSON,
     /// Some extra datas.
     pub extra_data: DMCLCExtraData,
-    pub(crate) launcher: &'l LauncherContext,
+    pub(crate) launcher: Arc<LauncherContext>,
     pub(crate) name: String,
     pub(crate) version_launch_work_dir: BetterPath,
     pub(crate) version_root: BetterPath
 }
 
-impl <'l> MinecraftInstallation<'l> {
-    pub(crate) fn new(launcher: &'l LauncherContext, json: VersionJSON, name: &str, extras: Option<DMCLCExtraData>) -> MinecraftInstallation<'l> {
+impl MinecraftInstallation {
+    pub(crate) fn new(launcher: Arc<LauncherContext>, json: VersionJSON, name: &str, extras: Option<DMCLCExtraData>) -> MinecraftInstallation {
         let version_root = *(&launcher.root_path / "versions" / name);
         let extra_data = if let Some(e) = extras {
             e
         } else {
             Self::get_extras(#[cfg(feature="mod_loaders")]launcher, &version_root, &json, true)
         };
-        
+
         let version_launch_work_dir = if extra_data.independent_game_dir {
             version_root.clone()
         } else {
@@ -112,7 +112,7 @@ impl <'l> MinecraftInstallation<'l> {
         }
         ret
     }
-    
+
     fn get_version_from_jar(jar_file: BetterPath) -> Option<String> {
         let mut archive = zip::ZipArchive::new(fs::File::open(jar_file).ok()?).ok()?;
         let obj: Value = serde_json::from_reader(archive.by_name("version.json").ok()?).ok()?;
