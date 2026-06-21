@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
-use anyhow::{Result, anyhow};
+use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
@@ -11,7 +11,7 @@ use uuid::{Builder, Uuid};
 use crate::{LauncherContext, minecraft::{login::AccountTrait, version::MinecraftInstallation}, utils::BetterPath};
 
 
-
+/// An offline account, useful if no Internet.
 #[derive(Serialize, Deserialize)]
 pub struct OfflineAccount(pub String);
 
@@ -53,8 +53,4 @@ impl AccountTrait for OfflineAccount {
     fn get_log_masks(&self) -> Vec<String> {
         vec![]
     }
-}
-
-async fn login(launcher: &LauncherContext) -> Result<OfflineAccount> {
-    Ok(OfflineAccount(launcher.ui.ask_user_one(&t!("accounts.offline.username"), None).await.ok_or(anyhow!("User cancelled."))?))
 }

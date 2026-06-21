@@ -9,6 +9,7 @@ use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, YggdrasilAccou
 
 use super::YggdrasilUserData;
 
+/// An account with nide8.
 #[derive(Serialize, Deserialize)]
 pub struct MinecraftUniversalLoginAccount {
     data: YggdrasilUserData,
@@ -41,6 +42,7 @@ impl YggdrasilAccountTrait for MinecraftUniversalLoginAccount {
 }
 
 impl MinecraftUniversalLoginAccount {
+    /// Create a new [MinecraftUniversalLoginAccount] with credentials.
     pub async fn login(launcher: &LauncherContext, server_id: String, username: String, password: String) -> Result<Self> {
         Ok(Self {
             data: yggdrasil::login(launcher, format!("https://auth.mc-user.com:233/{server_id}"), username, password).await?,

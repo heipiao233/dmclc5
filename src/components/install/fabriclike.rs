@@ -14,9 +14,12 @@ use super::ComponentInstallerTrait;
 /// We don't install Fabric API or QSL.
 #[async_trait]
 pub trait FabricLikeInstallerTrait: Send + Sync {
+    /// Metadata API URL
     const META_URL: &'static str;
+    /// Maven artifact name of the loader jar, which can indicate the version.
     const LOADER_ARTIFACT_NAME: &'static str;
     #[cfg(feature = "mod_loaders")]
+    /// Get the mod loaders the component provides.
     async fn get_loader(version: &str, launcher: &LauncherContext) -> Result<Vec<ModLoader>>;
 }
 
@@ -31,6 +34,7 @@ struct Version {
     version: String
 }
 
+/// A type mark for Fabric Loader installer.
 #[derive(Clone, Copy)]
 pub struct FabricInstaller;
 
@@ -54,6 +58,7 @@ impl FabricLikeInstallerTrait for FabricInstaller {
     }
 }
 
+/// A type mark for Quilt Loader installer.
 #[derive(Clone, Copy)]
 pub struct QuiltInstaller;
 
@@ -80,9 +85,12 @@ impl FabricLikeInstallerTrait for QuiltInstaller {
     }
 }
 
+/// A type mark for Fabric-like installers.
 #[derive(Clone, Copy)]
-pub struct FabricLikeInstaller<T: FabricLikeInstallerTrait>(pub T);
+pub struct FabricLikeInstaller<T: FabricLikeInstallerTrait>(T);
+/// The Fabric Loader component type
 pub static FABRIC_INSTALLER: ComponentInstaller = ComponentInstaller::Fabric(FabricLikeInstaller(FabricInstaller));
+/// The Quilt Loader component type
 pub static QUILT_INSTALLER: ComponentInstaller = ComponentInstaller::Quilt(FabricLikeInstaller(QuiltInstaller));
 
 #[async_trait]

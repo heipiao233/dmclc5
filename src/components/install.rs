@@ -17,10 +17,7 @@ use tokio::sync::mpsc;
 use crate::components::mods::ModLoader;
 use crate::{LauncherContext, components::install::{fabriclike::{FABRIC_INSTALLER, FabricInstaller, FabricLikeInstaller, QUILT_INSTALLER, QuiltInstaller}, forge::{FORGE_INSTALLER, ForgeInstaller}, forgelike::ForgeLikeInstaller, neoforge::{NEOFORGE_INSTALLER, NeoForgeInstaller}}, minecraft::{schemas::VersionJSON, version::{ComponentInfo, MinecraftInstallation}}, utils::DownloadAllMessage};
 
-use super::mods::ModLoaderTrait;
-
-/// A installer for a component.
-/// A "component" is something like Forge, NeoForge, Fabric, Quilt, LiteLoader and OptiFine.
+/// The interface for [ComponentInstaller].
 #[async_trait]
 #[enum_dispatch(ComponentInstaller)]
 pub trait ComponentInstallerTrait: Send + Sync {
@@ -41,7 +38,10 @@ pub trait ComponentInstallerTrait: Send + Sync {
     async fn get_mod_loaders(&self, version: &str, launcher: &LauncherContext) -> Result<Vec<ModLoader>>;
 }
 
+/// A installer for a component.
+/// A "component" is a something needing, like Forge, NeoForge, Fabric, Quilt, LiteLoader and OptiFine.
 #[enum_dispatch]
+#[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub enum ComponentInstaller {
     Forge(ForgeLikeInstaller<ForgeInstaller>),

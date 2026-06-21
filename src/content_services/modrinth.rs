@@ -1,3 +1,5 @@
+//! [Modrinth](https://modrinth.com/), operated by [Spark Universe](https://sparkuniverse.com/) based in Germany.
+
 use std::{collections::HashMap, fmt::Debug, sync::LazyLock};
 
 use anyhow::{anyhow, Error, Result};
@@ -108,6 +110,7 @@ struct Hashes {
     sha1: String
 }
 
+/// A project on Modrinth. A kind of content.
 #[derive(Serialize, Deserialize)]
 pub struct ModrinthProject {
     slug: String,
@@ -207,7 +210,7 @@ struct ModrinthVersionModel {
     files: Vec<ModrinthFile>
 }
 
-#[allow(unused)]
+/// The Modrinth service.
 pub struct ModrinthContentService;
 
 impl Debug for ModrinthProject {
@@ -222,6 +225,7 @@ impl Debug for ModrinthContentVersion {
     }
 }
 
+/// A content version on Modrinth
 pub struct ModrinthContentVersion(ModrinthVersionModel, ModrinthFile);
 
 impl ModrinthProject {

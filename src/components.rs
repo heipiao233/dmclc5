@@ -9,6 +9,7 @@ pub mod install;
 pub mod mods;
 
 #[cfg(feature="components_installation")]
+/// All the supported components.
 pub const COMPONENTS: [ComponentInstaller; 4] = [
     FORGE_INSTALLER,
     NEOFORGE_INSTALLER,

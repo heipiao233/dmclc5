@@ -83,7 +83,7 @@ impl MinecraftInstallation {
         let mut res = vec![];
         let assets = &self.obj.get_base().asset_index;
         let asset_path = &(&self.launcher.root_path / "assets/indexes" / &format!("{}.json", assets.res.id));
-        let index = if !check_hash(asset_path, &assets.res.res.sha1, assets.res.res.size, PhantomData::<Sha1>).await {
+        let index = if !check_hash::<Sha1>(asset_path, &assets.res.res.sha1, assets.res.res.size).await {
             download_txt(&assets.res.res.url, asset_path).await?
         } else {
             let mut str = String::new();

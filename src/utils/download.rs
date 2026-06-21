@@ -1,13 +1,12 @@
 /// Things about downloading.
-use std::{io::Write, marker::PhantomData, ops::Add, os::unix::fs::MetadataExt, sync::Arc, time::Duration};
+use std::{os::unix::fs::MetadataExt, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use async_fetcher::{FetchEvent, Fetcher, Source};
 use futures_util::{io::AllowStdIo, StreamExt};
 
 use reqwest::IntoUrl;
-use sha1::{digest::OutputSizeUser, Digest, Sha1};
-use sha2::digest::generic_array::ArrayLength;
+use sha1::{Digest, Sha1, digest::Update};
 use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
@@ -18,8 +17,7 @@ use super::BetterPath;
 ///
 /// # Arguments
 /// * `T` - A hash algorithm like [Sha1] or [Sha256](sha2::Sha256)
-pub async fn check_hash<T: Digest + Write>(path: &BetterPath, digest: &str, size: usize, _: PhantomData<T>) -> bool
-    where <T as OutputSizeUser>::OutputSize: Add, <<T as OutputSizeUser>::OutputSize as Add>::Output: ArrayLength<u8> {
+pub async fn check_hash<T: Digest + Update>(path: &BetterPath, digest: &str, size: usize) -> bool {
     let meta = fs::metadata(path).await;
     if meta.is_err() {
         return false;
@@ -29,12 +27,11 @@ pub async fn check_hash<T: Digest + Write>(path: &BetterPath, digest: &str, size
         return false;
     }
     if let Ok(f) = File::open(path).await {
-        let mut sha1 = AllowStdIo::new(T::new());
-        if futures_util::io::copy(&mut f.compat(), &mut sha1).await.is_err() {
+        let mut hash = AllowStdIo::new(digest_io::IoWrapper(T::new()));
+        if futures_util::io::copy(&mut f.compat(), &mut hash).await.is_err() {
             return false;
         }
-        let out = sha1.into_inner().finalize();
-        format!("{out:x}") == digest
+        hex::encode(T::new().finalize()) == digest
     } else {
         false
     }
@@ -42,7 +39,7 @@ pub async fn check_hash<T: Digest + Write>(path: &BetterPath, digest: &str, size
 
 /// Download a [Resource] to the `path`.
 pub async fn download_res(res: &Resource, path: &BetterPath) -> Result<()> {
-    if check_hash(path, &res.sha1, res.size, PhantomData::<Sha1>).await {
+    if check_hash::<Sha1>(path, &res.sha1, res.size).await {
         return Ok(());
     }
     download(res.url.clone(), path).await
@@ -52,7 +49,7 @@ pub async fn download_res(res: &Resource, path: &BetterPath) -> Result<()> {
 pub type DownloadAllMessage = std::result::Result<(BetterPath, FetchEvent), (BetterPath, anyhow::Error)>;
 
 async fn check_and_download(path: &BetterPath, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
-    if !check_hash(path, &res.sha1, res.size, PhantomData::<Sha1>).await {
+    if !check_hash::<Sha1>(path, &res.sha1, res.size).await {
         let _ = fs::create_dir_all(&path.0.parent().unwrap()).await;
         Some((Source {
             dest: Arc::from(path.0.as_path()),

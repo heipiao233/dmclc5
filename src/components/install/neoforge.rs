@@ -1,11 +1,15 @@
+//! [NeoForge](https://neoforged.net/) component installer.
+
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
 use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
 use super::forgelike::ForgeLikeInstallerTrait;
 
+/// A type mark for NeoForge installer.
 #[derive(Clone, Copy)]
-pub(crate) struct NeoForgeInstaller;
+pub struct NeoForgeInstaller;
+/// The NeoForge component type
 pub const NEOFORGE_INSTALLER: ComponentInstaller = ComponentInstaller::NeoForge(ForgeLikeInstaller(NeoForgeInstaller));
 
 impl ForgeLikeInstallerTrait for NeoForgeInstaller {

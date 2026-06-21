@@ -1,4 +1,4 @@
-//! The authentication method that Mojang uses before the migration.
+//! The authentication method that Mojang uses before the migration. Still used by third party.
 
 pub(crate) mod mul;
 pub(crate) mod ali;
@@ -43,10 +43,16 @@ struct AuthResponse {
     available_profiles: Vec<Profile>
 }
 
-/// A kind of [Account] that Mojang uses before the migration.
+/// A kind of [Account] that Mojang uses before the migration. Used by some servers.
+/// With some mod (mostly based on Java Agent) they inject and modify the auth server to third party ones.
+/// This doesn't provide proof of purchase nowadays.
 #[enum_dispatch]
 pub enum YggdrasilAccount {
+    /// The most widely used alternative Yggdrasil injection.
+    /// See its source code in https://github.com/yushijinhun/authlib-injector
     AuthlibInjectorAccount,
+    /// So-called ["Minecraft 统一通行证"](https://login.mc-user.com:233/) or "nide8". Provide per-server authenication.
+    /// This injects a third party proprietary software provided by them to Minecraft.
     MinecraftUniversalLoginAccount
 }
 

@@ -34,6 +34,7 @@ pub struct Screenshot {
 /// Represents a `content`.
 #[async_trait]
 pub trait Content: Send + Sync {
+    /// type of [ContentVersion] provided by this type of [Content].
     type V: ContentVersion;
     /// List downloadable versions.
     async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<Self::V>>;
@@ -63,6 +64,7 @@ pub trait Content: Send + Sync {
  */
 #[async_trait]
 pub trait ContentVersion: Send + Sync {
+    /// type of [Content] providing this type of [ContentVersion].
     type C: Content<V = Self>;
     /// Get file url.
     fn get_version_file_url(&self) -> String;
@@ -90,6 +92,7 @@ pub enum ContentDependency<C: Content>
 /// A service (website) that provides contents like CurseForge and Modrinth.
 #[async_trait]
 pub trait ContentService: Send + Sync {
+    /// type of [Content] provided by this [ContentService].
     type C: Content;
     /// Search for contents.
     async fn search_content(

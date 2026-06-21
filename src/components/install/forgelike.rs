@@ -86,8 +86,9 @@ pub trait ForgeLikeInstallerTrait: Send + Sync {
     fn match_version(loader: &str, mc: &str) -> bool;
 }
 
+/// A type mark for Forge-like installers.
 #[derive(Clone, Copy)]
-pub struct ForgeLikeInstaller<T: ForgeLikeInstallerTrait>(pub T);
+pub struct ForgeLikeInstaller<T: ForgeLikeInstallerTrait>(pub(in crate::components::install) T);
 
 #[async_trait]
 impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller<T> {
@@ -156,10 +157,10 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                             let outputs = &processor.outputs;
                             res = true;
                             for (k, v) in outputs {
-                                res = res && check_hash(
+                                res = res && check_hash::<Sha1>(
                                     &BetterPath(PathBuf::from(transform_arguments(&k, installer_dir, &mc, &metadata))),
                                     &transform_arguments(&v, installer_dir, &mc, &metadata).into_string().unwrap(),
-                                    0, PhantomData::<Sha1>
+                                    0
                                 ).await;
                             }
                         }

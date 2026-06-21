@@ -1,3 +1,5 @@
+//! [CurseForge](https://www.curseforge.com/), operated by [OverWolf](https://www.overwolf.com/) based in Israel.
+
 use std::{collections::HashMap, fmt::Debug};
 
 use anyhow::Result;
@@ -84,6 +86,7 @@ struct ModAsset {
     url: String,
 }
 
+/// A Mod on CurseForge
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurseforgeMod {
@@ -138,6 +141,7 @@ enum RelationType {
     Include = 6,
 }
 
+/// A Mod file on CurseForge
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CurseforgeModFile {
@@ -179,7 +183,8 @@ struct DataWrapped<T> {
     data: T
 }
 
-pub(crate) struct CurseforgeContentService;
+/// The CurseForge service.
+pub struct CurseforgeContentService;
 
 impl Debug for CurseforgeMod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

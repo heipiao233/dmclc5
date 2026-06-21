@@ -149,7 +149,7 @@ impl ModIssue {
     }
 }
 
-/// Represents a mod loader like FML, Fabric Loader and Quilt Loader.
+/// The interface for [ModLoader].
 #[enum_dispatch(ModLoader)]
 pub trait ModLoaderTrait {
     /// Get the builtin mods.
@@ -158,11 +158,24 @@ pub trait ModLoaderTrait {
     fn get_mods_in_file(&self, path: &BetterPath) -> Result<Vec<ModInfo>>;
 }
 
+/// Represents a mod loader like FML, Fabric Loader and Quilt Loader.
+/// In DMCLC5 it can scan a mod file and give out mod metadata.
 #[enum_dispatch]
 pub enum ModLoader {
+    /// Fabric's mostly-version-independent mod loader.
+    /// https://github.com/FabricMC/fabric-loader
     FabricModLoader,
+    /// The mod-loader that cares.
+    /// A fork of Fabric Loader.
+    /// https://github.com/QuiltMC/quilt-loader
     QuiltModLoader,
+    /// MinecraftForge's mod Loader, FML, before 1.14.
+    /// https://github.com/MinecraftForge/FML
+    /// https://github.com/MinecraftForge/MinecraftForge
     OldForgeModLoader,
+    /// MinecraftForge after 1.14 or NeoForge's mod Loader, FML.
+    /// https://github.com/MinecraftForge/MinecraftForge
+    /// https://github.com/neoforged/FancyModLoader
     NewerForgeLikeModLoader
 }
 

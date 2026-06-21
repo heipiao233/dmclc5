@@ -13,6 +13,8 @@ use enum_dispatch::enum_dispatch;
 use uuid::Uuid;
 
 use crate::{LauncherContext, minecraft::login::{offline::OfflineAccount, yggdrasil::YggdrasilAccount}, utils::BetterPath};
+#[cfg(feature = "msa_auth")]
+use crate::minecraft::launch::msa::MicrosoftAccount;
 
 use super::version::MinecraftInstallation;
 
@@ -22,7 +24,10 @@ pub enum Account {
     /// Offline account. Please take care of anti priate.
     OfflineAccount,
     /// Yggdrasil account.
-    YggdrasilAccount
+    YggdrasilAccount,
+    #[cfg(feature = "msa_auth")]
+    /// Microsoft account. This is the only one that proves the player has bought Minecraft.
+    MicrosoftAccount
 }
 
 impl Display for Account {
@@ -34,6 +39,7 @@ impl Display for Account {
     }
 }
 
+/// The interface of [Account]
 #[async_trait]
 #[enum_dispatch(Account)]
 pub trait AccountTrait: Display + Send + Sync {

@@ -1,11 +1,15 @@
+//! [MinecraftForge](https://minecraftforge.net/) component installer.
+
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
 use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
 use super::forgelike::ForgeLikeInstallerTrait;
 
+/// A type mark for MinecraftForge installer.
 #[derive(Clone, Copy)]
 pub struct ForgeInstaller;
+/// The MinecraftForge component type
 pub const FORGE_INSTALLER: ComponentInstaller = ComponentInstaller::Forge(ForgeLikeInstaller(ForgeInstaller));
 
 impl ForgeLikeInstallerTrait for ForgeInstaller {
