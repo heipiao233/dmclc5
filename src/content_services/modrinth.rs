@@ -439,9 +439,9 @@ impl ContentService for ModrinthContentService {
     }
 
     async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
-        let mut sha1 = AllowStdIo::new(Sha1::new());
+        let mut sha1 = AllowStdIo::new(digest_io::IoWrapper(Sha1::new()));
         futures_util::io::copy(File::open(path).await?.compat(), &mut sha1).await?;
-        let res = launcher.http_client.get(format!("https://api.modrinth.com/v2/version/version_file/{:X}?algorithm=sha1", sha1.into_inner().finalize())).send().await?;
+        let res = launcher.http_client.get(format!("https://api.modrinth.com/v2/version/version_file/{}?algorithm=sha1", hex::encode_upper(sha1.into_inner().0.finalize()))).send().await?;
         if res.status() == StatusCode::NOT_FOUND {
             Ok(None)
         } else {

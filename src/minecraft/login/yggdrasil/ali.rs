@@ -1,4 +1,4 @@
-use std::{ffi::OsString, fmt::Display, marker::PhantomData};
+use std::{ffi::OsString, fmt::Display};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;

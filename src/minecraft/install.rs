@@ -1,6 +1,6 @@
 //! Things about installing Minecraft.
 
-use std::{marker::PhantomData, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::{Ok, Result};
 use sha1::Sha1;

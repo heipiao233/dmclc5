@@ -1,6 +1,6 @@
 //! Implementation of [ComponentInstaller] for Forge-like installers.
 
-use std::{collections::HashMap, ffi::OsString, io::Read, marker::PhantomData, path::PathBuf, process::Stdio};
+use std::{collections::HashMap, ffi::OsString, io::Read, path::PathBuf, process::Stdio};
 
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
