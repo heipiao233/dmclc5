@@ -5,12 +5,9 @@ mod download;
 pub mod maven_coord;
 
 use std::ffi::{OsStr, OsString};
-use std::fmt;
-use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
 use maven_coord::ArtifactCoordinate;
-use serde::{Deserialize, Serializer};
 #[cfg(feature="mod_loaders")]
 use serde::de::Visitor;
 #[cfg(feature="mod_loaders")]

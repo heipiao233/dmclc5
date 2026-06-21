@@ -11,7 +11,6 @@ use tokio::time;
 
 use crate::{LauncherContext, minecraft::{login::AccountTrait, version::MinecraftInstallation}, utils::BetterPath};
 
-use super::Account;
 
 const SCOPE: &str = "XboxLive.signin offline_access";
 

@@ -13,7 +13,7 @@ use tokio::{fs, process::Command, sync::mpsc};
 
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
-use crate::{LauncherContext, components::{install::fabriclike::FabricLikeInstallerTrait, mods::ModLoaderTrait}, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{BetterPath, DownloadAllMessage, PATH_DELIMITER, check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
+use crate::{LauncherContext, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{BetterPath, DownloadAllMessage, PATH_DELIMITER, check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
 
 use super::ComponentInstallerTrait;
 

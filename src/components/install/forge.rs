@@ -1,6 +1,6 @@
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
-use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, ModLoaderTrait, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
+use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
 use super::forgelike::ForgeLikeInstallerTrait;
 

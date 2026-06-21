@@ -1,6 +1,5 @@
 //! Implementation of [ComponentInstaller] for Fabric-like installers.
 
-use std::{future::Future, pin::Pin};
 
 use anyhow::Result;
 use async_trait::async_trait;

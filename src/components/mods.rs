@@ -13,7 +13,7 @@ use join_string::Join;
 use tokio::fs;
 use versions::Versioning;
 
-use crate::{components::{install::{ComponentInstaller, ComponentInstallerTrait}, mods::{fabric::FabricModLoader, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, quilt::QuiltModLoader}}, minecraft::version::MinecraftInstallation, utils::BetterPath};
+use crate::{components::{install::ComponentInstallerTrait, mods::{fabric::FabricModLoader, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, quilt::QuiltModLoader}}, minecraft::version::MinecraftInstallation, utils::BetterPath};
 
 /// A version requirement.
 /// If all the [versions::Requirement] matches, the [VersionBound] will match.

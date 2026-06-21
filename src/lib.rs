@@ -6,13 +6,7 @@ use std::{collections::HashMap, io::Write, path::Path, sync::Arc};
 
 use anyhow::{Ok, Result};
 use async_trait::async_trait;
-#[cfg(feature="mod_loaders")]
-use components::install::{fabriclike::FabricLikeInstallerTrait, forge::ForgeInstaller, neoforge::NeoForgeInstaller, ComponentInstallerTrait};
-#[cfg(feature="content_services")]
-use content_services::{ContentService, curseforge::CurseforgeContentService, modrinth::ModrinthContentService};
 use futures_util::StreamExt;
-#[cfg(feature="mod_loaders")]
-use map_macro::hash_map_e;
 use minecraft::{schemas::VersionJSON, version::MinecraftInstallation};
 use reqwest::Client;
 use tokio::{fs::{self, create_dir_all}, io::AsyncWriteExt};

@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
 
-use dmclc5::{LauncherContext, StdioUserInterface, components::install::{ComponentInstaller, fabriclike::FABRIC_INSTALLER}, minecraft::schemas::VersionList, utils::{BetterPath, DownloadAllMessage, download}};
+use dmclc5::{LauncherContext, StdioUserInterface, components::install::fabriclike::FABRIC_INSTALLER, minecraft::schemas::VersionList, utils::{BetterPath, DownloadAllMessage, download}};
 use tokio::sync::mpsc;
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {

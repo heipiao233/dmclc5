@@ -91,7 +91,7 @@ impl MinecraftInstallation {
 
     fn get_extras(
         #[cfg(feature="mod_loaders")]
-        launcher: &LauncherContext,
+        _launcher: &LauncherContext,
         version_root: &BetterPath, object: &VersionJSON, independent_game_dir: bool) -> DMCLCExtraData {
         let path = &*(version_root / "dmclc_extras.json");
         if fs::metadata(path).is_ok() && let Ok(f) = fs::File::open(path) && let Ok(v) = serde_json::from_reader(f) {
