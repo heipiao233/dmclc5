@@ -5,14 +5,17 @@ use std::{collections::HashMap, ffi::OsString, io::Read, marker::PhantomData, pa
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use fs_extra::dir::CopyOptions;
+use osstrtools_fix::Bytes;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use tempfile::TempDir;
 use tokio::{fs, process::Command, sync::mpsc};
 
-use crate::{components::mods::ModLoader, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json, BetterPath, DownloadAllMessage, PATH_DELIMITER}, LauncherContext};
+#[cfg(feature = "mod_loaders")]
+use crate::components::mods::ModLoader;
+use crate::{LauncherContext, components::{install::fabriclike::FabricLikeInstallerTrait, mods::ModLoaderTrait}, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{BetterPath, DownloadAllMessage, PATH_DELIMITER, check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
 
-use super::ComponentInstaller;
+use super::ComponentInstallerTrait;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct DataEntry {
@@ -67,27 +70,31 @@ enum InstallerProfile {
 }
 
 /// A Forge-like installer.
-pub trait ForgeLikeInstaller: Send + Sync {
+pub trait ForgeLikeInstallerTrait: Send + Sync {
+    /// Returns true if it supports old install_profile.json. (Installer for Forge <= 1.12)
+    const SUPPORTS_OLDER_VERSION: bool;
+    /// Returns the Maven group url in the repository.
+    const MAVEN_GROUP_URL: &'static str;
     /// Get the mod loaders it provides.
     #[cfg(feature = "mod_loaders")]
-    fn get_mod_loaders(&self, version: &str, launcher: &LauncherContext) -> Vec<Box<dyn ModLoader>>;
-    /// Returns true if it supports old install_profile.json. (Installer for Forge <= 1.12)
-    fn supports_older_version(&self) -> bool;
+    fn get_mod_loaders(version: &str, launcher: &LauncherContext) -> Vec<ModLoader>;
     /// Find the component in the [VersionJSON]. Returns the component version.
-    fn find_in_version(&self, mc: &VersionJSON) -> Option<String>;
-    /// Returns the Maven group url in the repository.
-    fn get_maven_group_url(&self) -> String;
+    fn find_in_version(mc: &VersionJSON) -> Option<String>;
     /// Returns the Maven archive base name in the repository.
-    fn get_archive_base_name(&self, mc_version: &str) -> String;
+    fn get_archive_base_name(mc_version: &str) -> String;
     /// Returns true if the given component version matches the Minecraft version.
-    fn match_version(&self, loader: &str, mc: &str) -> bool;
+    fn match_version(loader: &str, mc: &str) -> bool;
 }
 
+#[derive(Clone, Copy)]
+pub struct ForgeLikeInstaller<T: ForgeLikeInstallerTrait>(pub T);
+
 #[async_trait]
-impl <T: ForgeLikeInstaller> ComponentInstaller for T {
+impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller<T> {
+
     #[cfg(feature = "mod_loaders")]
-    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherContext) -> Result<Vec<Box<dyn ModLoader>>> {
-        Ok(self.get_mod_loaders(version, launcher))
+    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherContext) -> Result<Vec<ModLoader>> {
+        Ok(T::get_mod_loaders(version, launcher))
     }
 
     async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation) -> Result<Vec<String>>  {
@@ -98,18 +105,18 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
         if major < 5 || (major == 5 && minor != 2) {
             return Ok(vec![]);
         }
-        let res = reqwest::get(format!("{}/{}/maven-metadata.xml", self.get_maven_group_url(), self.get_archive_base_name(&version))).await?.text().await?;
+        let res = reqwest::get(format!("{}/{}/maven-metadata.xml", T::MAVEN_GROUP_URL, T::get_archive_base_name(&version))).await?.text().await?;
         let val = xmltree::Element::parse(res.as_bytes())?;
         Ok(val.get_child("versioning").unwrap()
             .get_child("versions").unwrap()
             .children.iter().map(|v|v.as_element().unwrap().get_text().unwrap().to_string())
-            .filter(|v| self.match_version(&v, &mc.extra_data.version.as_ref().unwrap())).collect())
+            .filter(|v| T::match_version(&v, &mc.extra_data.version.as_ref().unwrap())).collect())
     }
 
     async fn install(&self, mc: &mut MinecraftInstallation, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         let mcver = mc.extra_data.version.as_ref().unwrap().clone();
         let mut tmpfile = tokio::fs::File::from_std(tempfile::tempfile()?);
-        let url = format!("{}/{1}/{version}/{}-{version}-installer.jar", self.get_maven_group_url(), self.get_archive_base_name(&mcver));
+        let url = format!("{}/{1}/{version}/{}-{version}-installer.jar", T::MAVEN_GROUP_URL, T::get_archive_base_name(&mcver));
         download_to_writer(&url, &mut tmpfile).await?;
         let installer_dir = &BetterPath(tempfile::tempdir()?);
         zip::ZipArchive::new(tmpfile.into_std().await)?.extract(installer_dir)?;
@@ -166,8 +173,7 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
                                 .chain(std::iter::once(jar.clone()))
                                 .map(|i|i.0)
                                 .map(PathBuf::into_os_string)
-                                .intersperse(OsString::from(PATH_DELIMITER))
-                                .collect(),
+                                .collect::<Vec<OsString>>().join(PATH_DELIMITER.bytes_as_os_str()),
                             get_main_class(&jar)?
                         ], processor.args.iter().map(|v|transform_arguments(v, &installer_dir, &mc, &metadata)).collect()].concat();
                         if !Command::new("java")
@@ -183,7 +189,7 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
                 }
             },
             InstallerProfile::Old(metadata) => {
-                if !self.supports_older_version() {
+                if !T::SUPPORTS_OLDER_VERSION {
                     return Ok(());
                 }
                 let target = &mc.obj;
@@ -198,7 +204,7 @@ impl <T: ForgeLikeInstaller> ComponentInstaller for T {
     }
 
     fn find_in_version(&self, v: &VersionJSON) -> Option<String>  {
-        self.find_in_version(v)
+        T::find_in_version(v)
     }
 }
 

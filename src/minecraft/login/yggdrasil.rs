@@ -5,7 +5,7 @@ pub(crate) mod ali;
 
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use reqwest::StatusCode;
@@ -13,9 +13,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::{login::{AccountTrait, yggdrasil::{ali::AuthlibInjectorAccount, mul::MinecraftUniversalLoginAccount}}, version::MinecraftInstallation}, utils::BetterPath};
+use crate::{LauncherContext, minecraft::{login::AccountTrait, version::MinecraftInstallation}, utils::BetterPath};
+pub use ali::AuthlibInjectorAccount;
+pub use mul::MinecraftUniversalLoginAccount;
 
-use super::Account;
 
 /// Stored user data for a [YggdrasilAccount].
 #[derive(Serialize, Deserialize)]
@@ -58,14 +59,11 @@ impl Display for YggdrasilAccount {
     }
 }
 
+#[async_trait]
 #[enum_dispatch(YggdrasilAccount)]
 trait YggdrasilAccountTrait: Send + Sync + Display {
     /// Get the [YggdrasilUserData].
     fn get_data(&self) -> &YggdrasilUserData;
-    /// Get [YggdrasilUserData] (mutable).
-    fn get_data_mut(&mut self) -> &mut YggdrasilUserData;
-    /// Set [YggdrasilUserData].
-    fn set_data(&mut self, data: YggdrasilUserData);
     /// Get the API url.
     async fn get_api_url(&mut self) -> Result<String> {
         Ok(self.get_data().api_url.clone())
@@ -76,6 +74,7 @@ trait YggdrasilAccountTrait: Send + Sync + Display {
     async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>>;
 }
 
+#[async_trait]
 impl AccountTrait for YggdrasilAccount {
 
     async fn check(&mut self, launcher: &LauncherContext) -> bool {
@@ -95,46 +94,6 @@ impl AccountTrait for YggdrasilAccount {
             .send().await;
         res.is_ok() && res.unwrap().status() == StatusCode::NO_CONTENT
     }
-
-    // async fn login(&mut self, launcher: &LauncherContext) -> Result<()> {
-    //     let content = launcher.ui.ask_user(vec![
-    //         ("username", "Username"),
-    //         ("password", "Password")
-    //     ], None).await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
-    //     let api_url = self.get_api_url(launcher).await?;
-    //     let http = &launcher.http_client;
-
-    //     let meta: Value = http.get(&api_url).send().await?.json().await?;
-    //     let server_name = meta["meta"]["serverName"].as_str().unwrap().to_string();
-
-    //     let auth_req = json!({
-    //         "username": content["username"],
-    //         "password": content["password"],
-    //         "requestUser": true,
-    //         "agent": {
-    //             "name": "Minecraft",
-    //             "version": 1
-    //         }
-    //     });
-    //     let auth_res = http.post(format!("{api_url}/authserver/authenticate"))
-    //         .json(&auth_req)
-    //         .send().await?;
-    //     if auth_res.status().is_client_error() {
-    //         return Err(anyhow!("Yggdrasil auth returned error code {}", auth_res.status())); // TODO: i18n
-    //     }
-    //     let auth_res: AuthResponse = auth_res.json().await?;
-    //     let profile_id = launcher.ui.ask_user_choose(auth_res.available_profiles.iter().map(|i|i.name.as_str()).collect(), "Please select profile").await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
-    //     let profile = &auth_res.available_profiles[profile_id];
-    //     self.set_data(YggdrasilUserData {
-    //         api_url,
-    //         server_name,
-    //         client_token: auth_res.client_token,
-    //         name: profile.name.clone(),
-    //         uuid: profile.id,
-    //         at: auth_res.access_token
-    //     });
-    //     Ok(())
-    // }
 
     fn get_uuid(&self) -> Uuid {
         self.get_data().uuid
@@ -163,4 +122,38 @@ impl AccountTrait for YggdrasilAccount {
     fn get_log_masks(&self) -> Vec<String> {
         vec![self.get_data().at.clone(), self.get_data().client_token.clone()]
     }
+}
+
+async fn login(launcher: &LauncherContext, api_url: String, username: String, password: String) -> Result<YggdrasilUserData> {
+    let http = &launcher.http_client;
+
+    let meta: Value = http.get(&api_url).send().await?.json().await?;
+    let server_name = meta["meta"]["serverName"].as_str().unwrap().to_string();
+
+    let auth_req = json!({
+        "username": username,
+        "password": password,
+        "requestUser": true,
+        "agent": {
+            "name": "Minecraft",
+            "version": 1
+        }
+    });
+    let auth_res = http.post(format!("{api_url}/authserver/authenticate"))
+        .json(&auth_req)
+        .send().await?;
+    if auth_res.status().is_client_error() {
+        return Err(anyhow!("Yggdrasil auth returned error code {}", auth_res.status())); // TODO: i18n
+    }
+    let auth_res: AuthResponse = auth_res.json().await?;
+    let profile_id = launcher.ui.ask_user_choose(auth_res.available_profiles.iter().map(|i|i.name.as_str()).collect(), "Please select profile").await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
+    let profile = &auth_res.available_profiles[profile_id];
+    Ok(YggdrasilUserData {
+        api_url,
+        server_name,
+        client_token: auth_res.client_token,
+        name: profile.name.clone(),
+        uuid: profile.id,
+        at: auth_res.access_token
+    })
 }

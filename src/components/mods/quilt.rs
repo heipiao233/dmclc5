@@ -9,7 +9,7 @@ use zip::ZipArchive;
 
 use crate::utils::{json_newline_transform, BetterPath};
 
-use super::{fabric::{fabric_parse_req, Icons}, DepRequirement, ModInfo, ModLoader, VersionBound};
+use super::{fabric::{fabric_parse_req, Icons}, DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -162,7 +162,7 @@ impl QuiltModLoader {
         let mut jar_data = Vec::new();
         read.read_to_end(&mut jar_data)?;
         let mut stack: Vec<Cursor<Vec<u8>>> = vec![Cursor::new(jar_data)];
-        
+
         while let Some(current_read) = stack.pop() {
             let mut archive = ZipArchive::new(current_read)?;
             let mut mod_json = String::new();
@@ -218,12 +218,12 @@ impl QuiltModLoader {
                 }
             }
         }
-        
+
         Ok(res)
     }
 }
 
-impl ModLoader for QuiltModLoader {
+impl ModLoaderTrait for QuiltModLoader {
     fn get_builtin_mods(&self) -> Vec<ModInfo> {
         self.builtin_mods.clone().into_iter().flatten().collect()
     }

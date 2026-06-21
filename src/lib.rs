@@ -7,13 +7,12 @@ use std::{collections::HashMap, io::Write, path::Path, sync::Arc};
 use anyhow::{Ok, Result};
 use async_trait::async_trait;
 #[cfg(feature="mod_loaders")]
-use components::install::{fabriclike::FabricLikeInstaller, forge::ForgeInstaller, neoforge::NeoForgeInstaller, ComponentInstaller};
+use components::install::{fabriclike::FabricLikeInstallerTrait, forge::ForgeInstaller, neoforge::NeoForgeInstaller, ComponentInstallerTrait};
 #[cfg(feature="content_services")]
 use content_services::{ContentService, curseforge::CurseforgeContentService, modrinth::ModrinthContentService};
 use futures_util::StreamExt;
+#[cfg(feature="mod_loaders")]
 use map_macro::hash_map_e;
-#[cfg(feature="msa_auth")]
-use minecraft::login::microsoft::MicrosoftAccountConstructor;
 use minecraft::{schemas::VersionJSON, version::MinecraftInstallation};
 use reqwest::Client;
 use tokio::{fs::{self, create_dir_all}, io::AsyncWriteExt};
@@ -44,11 +43,6 @@ pub struct LauncherContext {
     ms_client_id: String,
     http_client: Client,
     ui: Box<dyn UserInterface>,
-    #[cfg(feature="components_installation")]
-    pub(crate) component_installers: HashMap<String, Box<dyn ComponentInstaller>>,
-    #[cfg(feature="content_services")]
-    /// A HashMap of [ContentService]s.
-    pub content_services: HashMap<String, Box<dyn ContentService>>,
     /// A HashMap of [AccountConstructor]s.
     // pub account_types: HashMap<String, Box<dyn AccountConstructor>>,
     /// Max download retry times.
@@ -180,18 +174,6 @@ impl LauncherContext {
             ms_client_id: ms_client_id.to_string(),
             http_client: Client::builder().user_agent("heipiao233/dmclc5 (heipiao233@outlook.com)").build()?,
             ui: Box::new(ui),
-            #[cfg(feature="mod_loaders")]
-            component_installers: hash_map_e!{
-                "forge".to_string() => Box::new(ForgeInstaller),
-                "neoforge".to_string() => Box::new(NeoForgeInstaller),
-                "fabric".to_string() => Box::new(FabricLikeInstaller::fabric()),
-                "quilt".to_string() => Box::new(FabricLikeInstaller::quilt()),
-            },
-            #[cfg(feature="content_services")]
-            content_services: hash_map_e! {
-                "curseforge".to_string() => Box::new(CurseforgeContentService),
-                "modrinth".to_string() => Box::new(ModrinthContentService)
-            },
             // #[cfg(feature="msa_auth")]
             // account_types: hash_map_e! {
             //     "offline".to_string() => Box::new(OfflineAccountConstructor),

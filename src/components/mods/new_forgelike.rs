@@ -10,7 +10,7 @@ use crate::utils::deserialize_maven_version_range;
 
 use crate::utils::BetterPath;
 
-use super::{DepRequirement, ModInfo, ModLoader, VersionBound};
+use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -174,7 +174,7 @@ impl NewerForgeLikeModLoader {
     }
 }
 
-impl ModLoader for NewerForgeLikeModLoader {
+impl ModLoaderTrait for NewerForgeLikeModLoader {
     fn get_builtin_mods(&self) -> Vec<ModInfo> {
         vec![self.builtin_mod.clone()]
     }

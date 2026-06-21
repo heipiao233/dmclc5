@@ -73,7 +73,7 @@ struct Gallery {
     title: Option<String>,
     description: Option<String>,
     created: String,
-    ordering: usize
+    ordering: isize
 }
 
 #[derive(Serialize, Deserialize)]
@@ -109,7 +109,7 @@ struct Hashes {
 }
 
 #[derive(Serialize, Deserialize)]
-struct ModrinthProject {
+pub struct ModrinthProject {
     slug: String,
     title: String,
     description: String,
@@ -124,16 +124,16 @@ struct ModrinthProject {
     discord_url: Option<String>,
     donation_urls: Option<Vec<DonationURLs>>,
     project_type: ProjectType,
-    downloads: usize,
+    downloads: isize,
     icon_url: Option<String>,
-    color: Option<usize>,
+    color: Option<isize>,
     id: String,
     team: String,
     moderator_message: Option<ModeratorMessage>,
     published: String,
     updated: String,
     approved: Option<String>,
-    followers: usize,
+    followers: isize,
     status: Status,
     license: License,
     versions: Vec<String>,
@@ -156,13 +156,13 @@ struct SearchResult {
     client_side: SideEnv,
     server_side: SideEnv,
     project_type: ProjectType,
-    downloads: usize,
+    downloads: isize,
     icon_url: Option<String>,
     project_id: String,
     author: String,
     display_categories: Vec<String>,
     versions: Vec<String>,
-    follows: usize,
+    follows: isize,
     date_created: String,
     date_modified: String,
     latest_version: String,
@@ -184,7 +184,7 @@ struct ModrinthFile {
     url: String,
     filename: String,
     primary: bool,
-    size: usize
+    size: isize
 }
 
 #[derive(Serialize, Deserialize)]
@@ -203,12 +203,12 @@ struct ModrinthVersionModel {
     project_id: String,
     author_id: String,
     date_published: String,
-    downloads: usize,
+    downloads: isize,
     files: Vec<ModrinthFile>
 }
 
 #[allow(unused)]
-pub(crate) struct ModrinthContentService;
+pub struct ModrinthContentService;
 
 impl Debug for ModrinthProject {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -222,7 +222,7 @@ impl Debug for ModrinthContentVersion {
     }
 }
 
-struct ModrinthContentVersion(ModrinthVersionModel, ModrinthFile);
+pub struct ModrinthContentVersion(ModrinthVersionModel, ModrinthFile);
 
 impl ModrinthProject {
     async fn from_id(id: &str, launcher: &LauncherContext) -> Result<Self> {
@@ -238,15 +238,16 @@ impl ModrinthContentVersion {
 
 #[async_trait]
 impl Content for ModrinthProject {
+    type V = ModrinthContentVersion;
     /**
      * List versions.
      * @param forVersion The Minecraft version you download for.
      * @throws RequestError
      */
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_>>, launcher: &LauncherContext) -> Result<Vec<Box<dyn ContentVersion>>> {
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<ModrinthContentVersion>> {
         let query = if let Some(v) = for_version {
             #[cfg(feature="mod_loaders")]
-            let loaders: String = serde_json::to_string(&v.extra_data.components.iter().map(|v|v.name.clone()).collect::<Vec<String>>()).unwrap();
+            let loaders: String = serde_json::to_string(&v.extra_data.components.iter().map(|v|v.name.to_string()).collect::<Vec<String>>()).unwrap();
             let mut ret = vec![#[cfg(feature="mod_loaders")]("loaders", loaders)];
             if let Some(vers) = &v.extra_data.version {
                 ret.push(("game_versions", format!("[\"{vers}\"]")));
@@ -256,7 +257,7 @@ impl Content for ModrinthProject {
             vec![]
         };
         let versions: Vec<ModrinthVersionModel> = launcher.http_client.get(format!("https://api.modrinth.com/v2/project/{}/version", self.slug)).query(&query).send().await?.json().await?;
-        Ok(versions.into_iter().map(|v|Box::new(ModrinthContentVersion::new(v)) as Box<dyn ContentVersion>).collect())
+        Ok(versions.into_iter().map(|v|ModrinthContentVersion::new(v)).collect())
     }
     fn get_title(&self) -> String {
         self.title.clone()
@@ -329,6 +330,7 @@ impl ModrinthContentVersion {
 
 #[async_trait]
 impl ContentVersion for ModrinthContentVersion {
+    type C = ModrinthProject;
     fn get_version_file_url(&self) -> String {
         self.1.url.clone()
     }
@@ -344,21 +346,21 @@ impl ContentVersion for ModrinthContentVersion {
     fn get_version_number(&self) -> String {
         self.0.version_number.clone()
     }
-    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency>> {
-        let mut deps: Vec<ContentDependency> = Vec::new();
+    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<ModrinthProject>>> {
+        let mut deps: Vec<ContentDependency<ModrinthProject>> = Vec::new();
         for i in &self.0.dependencies {
             if let Some(DependencyType::Incompatible | DependencyType::Embedded) | None = i.dependency_type {
                 continue;
             }
             if let Some(v) = &i.version_id {
                 let a = ContentDependency::ContentVersion(
-                    Box::new(ModrinthContentVersion::from_id(&v, &launcher).await?)
+                    ModrinthContentVersion::from_id(&v, &launcher).await?
                 );
                 deps.push(a);
             }
             if let Some(v) = &i.project_id {
                 let a = ContentDependency::Content(
-                    Box::new(ModrinthProject::from_id(v, &launcher).await?)
+                    ModrinthProject::from_id(v, &launcher).await?
                 );
                 deps.push(a);
             }
@@ -369,6 +371,7 @@ impl ContentVersion for ModrinthContentVersion {
 
 #[async_trait]
 impl ContentService for ModrinthContentService {
+    type C = ModrinthProject;
     async fn search_content(
         &self,
         name: &str,
@@ -376,9 +379,9 @@ impl ContentService for ModrinthContentService {
         limit: usize,
         kind: super::ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation<'_>>,
+        for_version: Option<&MinecraftInstallation>,
         launcher: &LauncherContext
-    ) -> Result<Vec<Box<dyn Content>>> {
+    ) -> Result<Vec<ModrinthProject>> {
         if let ContentType::World = kind {
             return Ok(vec![]);
         }
@@ -398,7 +401,7 @@ impl ContentService for ModrinthContentService {
             }
             #[cfg(feature="mod_loaders")]
             let loaders: Vec<String> = v.extra_data.components.iter().map(|v| {
-                format!("categories:{}", v.name)
+                format!("categories:{}", v.name.to_string())
             }).collect();
             #[cfg(feature="mod_loaders")]
             facets.push(loaders);
@@ -415,38 +418,38 @@ impl ContentService for ModrinthContentService {
         if !errors.is_empty() {
             Err(anyhow!(errors.iter().map(|v|format!("{v} {}\n", v.root_cause())).collect::<String>()).into())
         } else {
-            Ok(res.into_iter().map(|v|Box::new(v.unwrap()) as Box<dyn Content>).collect())
+            Ok(res.into_iter().map(|v|v.unwrap()).collect())
         }
     }
-    
+
     fn get_unsupported_content_types(&self) -> Vec<ContentType>  {
         vec![ContentType::World]
     }
-    
+
     fn get_sort_fields(&self) -> Vec<String> {
         vec!["newest".to_string(), "updated".to_string(), "relevance".to_string(), "downloads".to_string(), "follows".to_string()]
     }
-    
+
     fn get_default_sort_field(&self) -> String {
         "relevance".to_string()
     }
-    
-    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<Box<dyn ContentVersion>>> {
+
+    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
         let mut sha1 = AllowStdIo::new(Sha1::new());
         futures_util::io::copy(File::open(path).await?.compat(), &mut sha1).await?;
         let res = launcher.http_client.get(format!("https://api.modrinth.com/v2/version/version_file/{:X}?algorithm=sha1", sha1.into_inner().finalize())).send().await?;
         if res.status() == StatusCode::NOT_FOUND {
             Ok(None)
         } else {
-            Ok(Some(Box::new(ModrinthContentVersion::new(res.json().await?))))
+            Ok(Some(ModrinthContentVersion::new(res.json().await?)))
         }
     }
 
-    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<Box<dyn Content>>> {
-        Ok(Some(Box::new(ModrinthProject::from_id(id, launcher).await?)))
+    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<ModrinthProject>> {
+        Ok(Some(ModrinthProject::from_id(id, launcher).await?))
     }
 
-    async fn get_content_version_by_id(&self, _content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<Box<dyn ContentVersion>>> {
-        Ok(Some(Box::new(ModrinthContentVersion::from_id(id, launcher).await?)))
+    async fn get_content_version_by_id(&self, _content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
+        Ok(Some(ModrinthContentVersion::from_id(id, launcher).await?))
     }
 }

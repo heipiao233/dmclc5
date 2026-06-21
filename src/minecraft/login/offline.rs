@@ -1,6 +1,10 @@
+//! The authentication method that allows offline launch.
+//! Please take care of anti priate.
+
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::{Result, anyhow};
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
 
@@ -9,7 +13,7 @@ use crate::{LauncherContext, minecraft::{login::AccountTrait, version::Minecraft
 
 
 #[derive(Serialize, Deserialize)]
-pub struct OfflineAccount(String);
+pub struct OfflineAccount(pub String);
 
 impl Display for OfflineAccount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -17,6 +21,7 @@ impl Display for OfflineAccount {
     }
 }
 
+#[async_trait]
 impl AccountTrait for OfflineAccount {
 
     async fn check(&mut self, _: &LauncherContext) -> bool {

@@ -8,27 +8,33 @@ pub mod offline;
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::Result;
+use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::login::offline::OfflineAccount, utils::BetterPath};
+use crate::{LauncherContext, minecraft::login::{offline::OfflineAccount, yggdrasil::YggdrasilAccount}, utils::BetterPath};
 
 use super::version::MinecraftInstallation;
 
 /// An account.
 #[enum_dispatch]
 pub enum Account {
-    OfflineAccount
+    /// Offline account. Please take care of anti priate.
+    OfflineAccount,
+    /// Yggdrasil account.
+    YggdrasilAccount
 }
 
 impl Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::OfflineAccount(account) => account.fmt(f)
+            Self::OfflineAccount(account) => account.fmt(f),
+            Self::YggdrasilAccount(account) => account.fmt(f)
         }
     }
 }
 
+#[async_trait]
 #[enum_dispatch(Account)]
 pub trait AccountTrait: Display + Send + Sync {
 

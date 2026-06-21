@@ -3,16 +3,16 @@ use std::{ffi::OsString, fmt::Display, marker::PhantomData};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value, json};
 use sha2::Sha256;
 use base64::prelude::*;
 
-use crate::{LauncherContext, minecraft::{login::{Account, yggdrasil::YggdrasilAccountTrait}, version::MinecraftInstallation}, utils::{BetterPath, check_hash, download}};
+use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, YggdrasilAccountTrait}, version::MinecraftInstallation}, utils::{BetterPath, check_hash, download}};
 
-use super::{YggdrasilAccount, YggdrasilUserData};
+use super::YggdrasilUserData;
 
 #[derive(Serialize, Deserialize)]
-pub(crate) struct AuthlibInjectorAccount {
+pub struct AuthlibInjectorAccount {
     #[serde(flatten)]
     data: YggdrasilUserData
 }
@@ -23,18 +23,11 @@ impl Display for AuthlibInjectorAccount {
     }
 }
 
+#[async_trait]
 impl YggdrasilAccountTrait for AuthlibInjectorAccount {
 
     fn get_data(&self) -> &YggdrasilUserData {
         &self.data
-    }
-
-    fn get_data_mut(&mut self) -> &mut YggdrasilUserData {
-        &mut self.data
-    }
-
-    fn set_data(&mut self, data: YggdrasilUserData) {
-        self.data = data;
     }
 
     async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()> {
@@ -55,5 +48,13 @@ impl YggdrasilAccountTrait for AuthlibInjectorAccount {
             OsString::from(format!("-javaagent:./authlib-injector-latest.jar={}", self.data.api_url)),
             OsString::from(format!("-Dauthlibinjector.yggdrasil.prefetched={}", BASE64_STANDARD.encode(content)))
         ])
+    }
+}
+
+impl AuthlibInjectorAccount {
+    pub async fn login(launcher: &LauncherContext, api_url: String, username: String, password: String) -> Result<Self> {
+        Ok(Self {
+            data: yggdrasil::login(launcher, api_url, username, password).await?
+        })
     }
 }

@@ -8,7 +8,7 @@ use zip::ZipArchive;
 
 use crate::{components::mods::ModInfo, utils::parse_maven_version_range};
 
-use super::{ModLoader, VersionBound};
+use super::{ModLoaderTrait, VersionBound};
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,7 +29,7 @@ pub struct OldForgeModLoader {
     pub(in crate::components) version: String
 }
 
-impl ModLoader for OldForgeModLoader {
+impl ModLoaderTrait for OldForgeModLoader {
     fn get_builtin_mods(&self) -> Vec<super::ModInfo> {
         vec![
             ModInfo {

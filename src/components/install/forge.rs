@@ -1,17 +1,23 @@
-use crate::{components::mods::{new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, ModInfo, ModLoader}, minecraft::schemas::{Argument, VersionJSON}, LauncherContext};
+#[cfg(feature = "mod_loaders")]
+use crate::components::mods::ModLoader;
+use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, ModLoaderTrait, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
-use super::forgelike::ForgeLikeInstaller;
+use super::forgelike::ForgeLikeInstallerTrait;
 
-pub(crate) struct ForgeInstaller;
+#[derive(Clone, Copy)]
+pub struct ForgeInstaller;
+pub const FORGE_INSTALLER: ComponentInstaller = ComponentInstaller::Forge(ForgeLikeInstaller(ForgeInstaller));
 
-impl ForgeLikeInstaller for ForgeInstaller {
+impl ForgeLikeInstallerTrait for ForgeInstaller {
+    const SUPPORTS_OLDER_VERSION: bool = true;
+    const MAVEN_GROUP_URL: &'static str = "https://maven.minecraftforge.net/net/minecraftforge";
 
     #[cfg(feature = "mod_loaders")]
-    fn get_mod_loaders(&self, version: &str, _: &LauncherContext) -> Vec<Box<dyn ModLoader>> {
+    fn get_mod_loaders(version: &str, _: &LauncherContext) -> Vec<ModLoader> {
         if version.split(".").collect::<Vec<&str>>()[1].parse::<usize>().unwrap() <= 13 {
-            vec![Box::new(OldForgeModLoader {
+            vec![OldForgeModLoader {
                 version: version.split("-").collect::<Vec<_>>()[1].to_string()
-            })]
+            }.into()]
         } else {
             let loader = NewerForgeLikeModLoader {
                 builtin_mod: ModInfo {
@@ -28,15 +34,11 @@ impl ForgeLikeInstaller for ForgeInstaller {
                 },
                 mods_toml_name: "mods.toml".to_string()
             };
-            vec![Box::new(loader)]
+            vec![loader.into()]
         }
     }
 
-    fn supports_older_version(&self) -> bool {
-        true
-    }
-
-    fn find_in_version(&self, mc: &VersionJSON) -> Option<String> {
+    fn find_in_version(mc: &VersionJSON) -> Option<String> {
         for l in &mc.get_base().libraries {
             let coord = &l.get_base().name;
             if ["fmlloader", "forge"].contains(&coord.name.as_str()) {
@@ -54,15 +56,11 @@ impl ForgeLikeInstaller for ForgeInstaller {
         None
     }
 
-    fn get_maven_group_url(&self) -> String {
-        return "https://maven.minecraftforge.net/net/minecraftforge".to_string();
-    }
-
-    fn get_archive_base_name(&self, _mc_version: &str) -> String {
+    fn get_archive_base_name(_mc_version: &str) -> String {
         "forge".to_string()
     }
 
-    fn match_version(&self, loader: &str, mc: &str) -> bool {
+    fn match_version(loader: &str, mc: &str) -> bool {
         loader.starts_with(&(mc.to_owned() + "-"))
     }
 }

@@ -555,6 +555,7 @@ dependencies = [
  "fs_extra",
  "futures",
  "futures-util",
+ "join-string",
  "map-macro",
  "markdown-it",
  "md5",
@@ -566,6 +567,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_repr",
+ "serde_str",
  "sha1",
  "sha2",
  "tempfile",
@@ -1374,6 +1376,12 @@ dependencies = [
  "getrandom 0.3.4",
  "libc",
 ]
+
+[[package]]
+name = "join-string"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c256ea1b86607a462e2b82a3d3f429897f1695dbbe2a3805dcdd029f734fc12"
 
 [[package]]
 name = "js-sys"
@@ -2391,6 +2399,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8bbf91e5a4d6315eee45e704372590b30e260ee83af6639d64557f51b067776"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "serde_str"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a26e850fb9dfec51e9fea9dd582030761a4ef011d31b32d904f740961bd16a48"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

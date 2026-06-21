@@ -8,10 +8,12 @@ pub mod old_forge;
 use std::{collections::HashMap, fmt::{Debug, Display, Write}};
 
 use anyhow::{anyhow, Result};
+use enum_dispatch::enum_dispatch;
+use join_string::Join;
 use tokio::fs;
 use versions::Versioning;
 
-use crate::{minecraft::version::MinecraftInstallation, utils::BetterPath};
+use crate::{components::{install::{ComponentInstaller, ComponentInstallerTrait}, mods::{fabric::FabricModLoader, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, quilt::QuiltModLoader}}, minecraft::version::MinecraftInstallation, utils::BetterPath};
 
 /// A version requirement.
 /// If all the [versions::Requirement] matches, the [VersionBound] will match.
@@ -32,7 +34,7 @@ impl VersionBound {
 
 impl ToString for VersionBound {
     fn to_string(&self) -> String {
-        self.0.iter().map(ToString::to_string).intersperse(" ".to_string()).collect()
+        self.0.iter().map(ToString::to_string).join(" ".to_string()).into_string()
     }
 }
 
@@ -54,10 +56,10 @@ impl Display for DepRequirement {
         f.write_str(&self.id)?;
         if !self.version.is_empty() {
             f.write_char(' ')?;
-            f.write_str(&self.version.iter().map(ToString::to_string).intersperse(format!(" {} ", t!("or"))).collect::<String>())?;
+            f.write_str(&self.version.iter().map(ToString::to_string).join(&format!(" {} ", t!("or"))).into_string())?;
         }
         if !self.unless.is_empty() {
-            write!(f, ", {} ", t!("dependencies.unless", unless = self.unless.iter().map(ToString::to_string).intersperse(format!(" {} ", t!("or"))).collect::<String>()))?;
+            write!(f, ", {} ", t!("dependencies.unless", unless = self.unless.iter().map(ToString::to_string).join(format!(" {} ", t!("or")))))?;
         }
 
         if let Some(v) = &self.reason {
@@ -148,11 +150,20 @@ impl ModIssue {
 }
 
 /// Represents a mod loader like FML, Fabric Loader and Quilt Loader.
-pub trait ModLoader {
+#[enum_dispatch(ModLoader)]
+pub trait ModLoaderTrait {
     /// Get the builtin mods.
     fn get_builtin_mods(&self) -> Vec<ModInfo>;
     /// Get the mods in a file.
     fn get_mods_in_file(&self, path: &BetterPath) -> Result<Vec<ModInfo>>;
+}
+
+#[enum_dispatch]
+pub enum ModLoader {
+    FabricModLoader,
+    QuiltModLoader,
+    OldForgeModLoader,
+    NewerForgeLikeModLoader
 }
 
 fn check_mod_dependency(mods: &HashMap<String, ModInfo>, dependency: &DepRequirement, opposite: bool) -> bool {
@@ -180,7 +191,7 @@ fn check_mod_dependency(mods: &HashMap<String, ModInfo>, dependency: &DepRequire
 }
 
 /// Check if all the mod dependencies are met.
-/// 
+///
 /// # Arguments
 /// * `mods` - A HashMap, the key is mod id, and the value is [ModInfo].
 pub fn check_mod_dependencies(mods: &HashMap<String, ModInfo>) -> Vec<ModIssue> {
@@ -215,14 +226,13 @@ pub fn check_mod_dependencies(mods: &HashMap<String, ModInfo>) -> Vec<ModIssue> 
     issues
 }
 
-impl MinecraftInstallation<'_> {
+impl MinecraftInstallation {
     /// Check if all the mod dependencies are met in the [MinecraftInstallation].
     pub async fn check_mod_dependencies(&self) -> Result<Vec<ModIssue>> {
         let mut mods: HashMap<String, ModInfo> = self.list_mods().await?.into_values().flat_map(HashMap::into_iter).collect();
         let mut loaders = vec![];
         for i in &self.extra_data.components {
-            let v = &*self.launcher.component_installers[&i.name];
-            let loader = v.get_mod_loaders(&i.version, self.launcher).await?;
+            let loader = i.name.get_mod_loaders(&i.version, &self.launcher).await?;
             for l in &loader {
                 for m in l.get_builtin_mods() {
                     mods.insert(m.id.clone(), m);
@@ -246,22 +256,21 @@ impl MinecraftInstallation<'_> {
     }
 
     /// Get the mod list.
-    /// 
+    ///
     /// # Returns
     /// A HashMap. The key is file name, and the value is a HashMap that contains all the mod IDs and [ModInfo]s in this file.
     pub async fn list_mods(&self) -> Result<HashMap<String, HashMap<String, ModInfo>>> {
         if let None = self.extra_data.version {
             return Err(anyhow!(t!("loaders.minecraft_version_unknown")));
         }
-        let mut loaders = vec![];
-        for i in &self.extra_data.components {
-            let v = &*self.launcher.component_installers[&i.name];
-            let loader = v.get_mod_loaders(&i.version, self.launcher).await?;
-            loaders.extend(loader);
-        }
         let mut mods: HashMap<String, HashMap<String, ModInfo>> = HashMap::new();
         let moddir = &self.version_launch_work_dir / "mods";
         let mut dir = fs::read_dir(&moddir).await?;
+        let mut loaders = vec![];
+        for i in &self.extra_data.components {
+            let loader = i.name.get_mod_loaders(&i.version, &self.launcher).await?;
+            loaders.extend(loader);
+        }
         while let Some(file) = dir.next_entry().await? {
             if !file.file_type().await?.is_dir() {
                 let mut mods_in_file = HashMap::new();

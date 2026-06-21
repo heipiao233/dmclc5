@@ -1,6 +1,6 @@
-use std::{path::{Path, PathBuf}, str::FromStr};
+use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
 
-use dmclc5::{minecraft::schemas::VersionList, utils::{download, BetterPath, DownloadAllMessage}, LauncherContext, StdioUserInterface};
+use dmclc5::{LauncherContext, StdioUserInterface, components::install::{ComponentInstaller, fabriclike::FABRIC_INSTALLER}, minecraft::schemas::VersionList, utils::{BetterPath, DownloadAllMessage, download}};
 use tokio::sync::mpsc;
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -29,7 +29,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 #[tokio::main]
 async fn main() {
-    let launcher: LauncherContext = LauncherContext::new(Path::new("./test"), StdioUserInterface).await.unwrap();
+    let launcher = Arc::new(LauncherContext::new(Path::new("./test"), StdioUserInterface).await.unwrap());
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
         let mut count = 0;
@@ -38,7 +38,7 @@ async fn main() {
         }
     };
     let mc = VersionList::get_list().await.unwrap();
-    let mc = mc.find_by_id("1.20.4").unwrap().install(&launcher, "1.20.4-fabric", tx);
+    let mc = mc.find_by_id("1.20.4").unwrap().install(launcher, "1.20.4-fabric", tx);
     let mut mc = tokio::join!(handler, mc).1.unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
@@ -47,7 +47,7 @@ async fn main() {
             handle_msg(next, &mut count).await;
         }
     };
-    tokio::join!(mc.install_component("fabric", "0.16.0", tx), handler).0.unwrap();
+    tokio::join!(mc.install_component(FABRIC_INSTALLER, "0.16.0", tx), handler).0.unwrap();
     let path = BetterPath(PathBuf::from_str("./test/versions/1.20.4-fabric/mods/entityculling-fabric-1.6.6-mc1.20.4.jar").unwrap());
     download("https://cdn.modrinth.com/data/NNAgCjsB/versions/cj8nR3eG/entityculling-fabric-1.6.6-mc1.20.4.jar", &path).await.unwrap();
     println!("{:#?}", mc.list_mods().await.unwrap());

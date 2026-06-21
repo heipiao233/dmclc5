@@ -1,12 +1,19 @@
-use crate::{components::mods::{new_forgelike::NewerForgeLikeModLoader, ModInfo, ModLoader}, minecraft::schemas::{Argument, VersionJSON}, LauncherContext};
+#[cfg(feature = "mod_loaders")]
+use crate::components::mods::ModLoader;
+use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, ModLoaderTrait, new_forgelike::NewerForgeLikeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
-use super::forgelike::ForgeLikeInstaller;
+use super::forgelike::ForgeLikeInstallerTrait;
 
+#[derive(Clone, Copy)]
 pub(crate) struct NeoForgeInstaller;
+pub const NEOFORGE_INSTALLER: ComponentInstaller = ComponentInstaller::NeoForge(ForgeLikeInstaller(NeoForgeInstaller));
 
-impl ForgeLikeInstaller for NeoForgeInstaller {
+impl ForgeLikeInstallerTrait for NeoForgeInstaller {
+    const SUPPORTS_OLDER_VERSION: bool = false;
+    const MAVEN_GROUP_URL: &'static str = "https://maven.neoforged.net/releases/net/neoforged";
+
     #[cfg(feature = "mod_loaders")]
-    fn get_mod_loaders(&self, version: &str, _: &LauncherContext) -> Vec<Box<dyn ModLoader>> {
+    fn get_mod_loaders(version: &str, _: &LauncherContext) -> Vec<ModLoader> {
         let id = if version.starts_with("1.20.1-") {
             "forge".to_string()
         } else {
@@ -32,14 +39,10 @@ impl ForgeLikeInstaller for NeoForgeInstaller {
             },
             mods_toml_name
         };
-        vec![Box::new(loader)]
+        vec![loader.into()]
     }
 
-    fn supports_older_version(&self) -> bool {
-        false
-    }
-
-    fn find_in_version(&self, mc: &VersionJSON) -> Option<String> {
+    fn find_in_version(mc: &VersionJSON) -> Option<String> {
         if let VersionJSON::New { arguments, base: _ } = mc {
             for arg2 in arguments.game.as_ref()?.windows(2) {
                 if let Argument::String(v) = &arg2[0] && v == "--fml.neoForgeVersion" && let Argument::String(w) = &arg2[1] {
@@ -50,11 +53,7 @@ impl ForgeLikeInstaller for NeoForgeInstaller {
         None
     }
 
-    fn get_maven_group_url(&self) -> String {
-        return "https://maven.neoforged.net/releases/net/neoforged".to_string();
-    }
-
-    fn get_archive_base_name(&self, mc_version: &str) -> String {
+    fn get_archive_base_name(mc_version: &str) -> String {
         if mc_version == "1.20.1" {
             "forge".to_string()
         } else {
@@ -62,7 +61,7 @@ impl ForgeLikeInstaller for NeoForgeInstaller {
         }
     }
 
-    fn match_version(&self, loader: &str, mc: &str) -> bool {
+    fn match_version(loader: &str, mc: &str) -> bool {
         if mc == "1.20.1" {
             loader.starts_with("1.20.1-")
         } else if mc.contains("-") || mc.contains("w") {

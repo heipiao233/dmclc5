@@ -5,9 +5,12 @@ mod download;
 pub mod maven_coord;
 
 use std::ffi::{OsStr, OsString};
+use std::fmt;
+use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
 use maven_coord::ArtifactCoordinate;
+use serde::{Deserialize, Serializer};
 #[cfg(feature="mod_loaders")]
 use serde::de::Visitor;
 #[cfg(feature="mod_loaders")]
@@ -158,9 +161,15 @@ pub fn parse_maven_version_range(v: &str) -> anyhow::Result<Vec<VersionBound>> {
             version: Some(Versioning::parse(v).map_err(|_|error)?.1)
         })]);
     }
-    let splited = v.split(",");
+    let mut splited = v.split(",");
     let mut ret = vec![];
-    for [lower, upper] in splited.array_chunks() {
+    loop {
+        let Some(upper) = splited.next() else {
+            break
+        };
+        let Some(lower) = splited.next() else {
+            break
+        };
         let mut bounds = vec![];
         if lower != "(" && lower.starts_with("(") {
             bounds.push(Requirement {

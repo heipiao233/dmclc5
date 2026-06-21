@@ -5,7 +5,11 @@ use std::{ffi::OsString, fs, sync::Arc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{utils::BetterPath, LauncherContext};
+#[cfg(feature="mod_loaders")]
+use crate::components::COMPONENTS;
+#[cfg(feature="components_installation")]
+use crate::components::install::ComponentInstaller;
+use crate::{LauncherContext, utils::BetterPath};
 
 use super::schemas::VersionJSON;
 
@@ -13,6 +17,11 @@ use super::schemas::VersionJSON;
 #[derive(Serialize, Deserialize)]
 pub struct ComponentInfo {
     /// Name.
+    #[serde(with = "serde_str")]
+    #[cfg(feature="components_installation")]
+    pub name: ComponentInstaller,
+    /// Name.
+    #[cfg(not(feature="components_installation"))]
     pub name: String,
     /// Version of the component.
     pub version: String
@@ -62,7 +71,7 @@ impl MinecraftInstallation {
         let extra_data = if let Some(e) = extras {
             e
         } else {
-            Self::get_extras(#[cfg(feature="mod_loaders")]launcher, &version_root, &json, true)
+            Self::get_extras(#[cfg(feature="mod_loaders")]&launcher, &version_root, &json, true)
         };
 
         let version_launch_work_dir = if extra_data.independent_game_dir {
@@ -82,7 +91,7 @@ impl MinecraftInstallation {
 
     fn get_extras(
         #[cfg(feature="mod_loaders")]
-        launcher: &'l LauncherContext,
+        launcher: &LauncherContext,
         version_root: &BetterPath, object: &VersionJSON, independent_game_dir: bool) -> DMCLCExtraData {
         let path = &*(version_root / "dmclc_extras.json");
         if fs::metadata(path).is_ok() && let Ok(f) = fs::File::open(path) && let Ok(v) = serde_json::from_reader(f) {
@@ -91,9 +100,11 @@ impl MinecraftInstallation {
         #[allow(unused_mut)]
         let mut components: Vec<ComponentInfo> = Vec::new();
         #[cfg(feature="mod_loaders")]
-        for (name, i) in &launcher.component_installers {
-            if let Some(version) = i.find_in_version(object) {
-                components.push(ComponentInfo { name: name.clone(), version });
+        for component in &COMPONENTS {
+            use crate::components::install::ComponentInstallerTrait;
+
+            if let Some(version) = component.find_in_version(object) {
+                components.push(ComponentInfo { name: component.clone(), version });
             }
         }
         let version = object.get_base().client_version.clone()

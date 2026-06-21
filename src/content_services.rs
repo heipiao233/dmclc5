@@ -1,8 +1,8 @@
 //! Things about contents.
 //! Contents are things like mods, data packs, resource packs, worlds, modpacks and shaders...
 
-pub(crate) mod modrinth;
-pub(crate) mod curseforge;
+pub mod modrinth;
+pub mod curseforge;
 
 use std::collections::HashMap;
 
@@ -34,8 +34,9 @@ pub struct Screenshot {
 /// Represents a `content`.
 #[async_trait]
 pub trait Content: Send + Sync {
+    type V: ContentVersion;
     /// List downloadable versions.
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_>>, launcher: &LauncherContext) -> Result<Vec<Box<dyn ContentVersion>>>;
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<Self::V>>;
     /// Get title.
     fn get_title(&self) -> String;
     /// Get description.
@@ -62,6 +63,7 @@ pub trait Content: Send + Sync {
  */
 #[async_trait]
 pub trait ContentVersion: Send + Sync {
+    type C: Content<V = Self>;
     /// Get file url.
     fn get_version_file_url(&self) -> String;
     /// Get file SHA1.
@@ -73,21 +75,22 @@ pub trait ContentVersion: Send + Sync {
     /// Get version number.
     fn get_version_number(&self) -> String;
     /// List the dependencies.
-    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency>>;
+    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<Self::C>>>;
 }
 
 /// Represents the dependencies.
-pub enum ContentDependency
+pub enum ContentDependency<C: Content>
 {
     /// A [Content].
-    Content(Box<dyn Content>),
+    Content(C),
     /// A [ContentVersion].
-    ContentVersion(Box<dyn ContentVersion>),
+    ContentVersion(C::V),
 }
 
 /// A service (website) that provides contents like CurseForge and Modrinth.
 #[async_trait]
 pub trait ContentService: Send + Sync {
+    type C: Content;
     /// Search for contents.
     async fn search_content(
         &self,
@@ -96,9 +99,9 @@ pub trait ContentService: Send + Sync {
         limit: usize,
         kind: ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation<'_>>,
+        for_version: Option<&MinecraftInstallation>,
         launcher: &LauncherContext
-    ) -> Result<Vec<Box<dyn Content>>>;
+    ) -> Result<Vec<Self::C>>;
     /// Get unsupported [ContentType]s.
     fn get_unsupported_content_types(&self) -> Vec<ContentType>;
     /// Get all sort fields.
@@ -106,11 +109,11 @@ pub trait ContentService: Send + Sync {
     /// Get the default sort field.
     fn get_default_sort_field(&self) -> String;
     /// Get a [ContentVersion] from a file.
-    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<Box<dyn ContentVersion>>>;
+    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<<Self::C as Content>::V>>;
 
     /// Get a [Content] by ID.
-    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<Box<dyn Content>>>;
+    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<Self::C>>;
 
     /// Get a [ContentVersion] by ID.
-    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<Box<dyn ContentVersion>>>;
+    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<<Self::C as Content>::V>>;
 }

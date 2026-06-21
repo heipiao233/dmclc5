@@ -8,24 +8,31 @@ use serde_json::{json, Value};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio::{fs::File, io::AsyncReadExt};
 
+#[cfg(feature="mod_loaders")]
+use crate::components::install::ComponentInstaller;
 use crate::{minecraft::version::MinecraftInstallation, utils::BetterPath, LauncherContext};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 #[cfg(feature="mod_loaders")]
-const LOADER_TO_CURSEFORGE: LazyLock<HashMap<String, usize>> = LazyLock::new(||HashMap::from([
-    ("forge".to_string(), 1),
-    ("fabric".to_string(), 4),
-    ("quilt".to_string(), 5),
-    ("neoforge".to_string(), 6)
-]));
+fn component_to_curseforge(component: ComponentInstaller) -> usize {
+    match component {
+        ComponentInstaller::Fabric(_) => 4,
+        ComponentInstaller::Forge(_) => 1,
+        ComponentInstaller::NeoForge(_) => 6,
+        ComponentInstaller::Quilt(_) => 5
+    }
+}
 
-const CONTENT_TYPE_TO_CURSEFORGE: LazyLock<HashMap<ContentType, &str>> = LazyLock::new(||HashMap::from([
-    (ContentType::ModPack, "4471"),
-    (ContentType::Shader, "4546"),
-    (ContentType::Mod, "6"),
-    (ContentType::ResourcePack, "12"),
-    (ContentType::World, "17"),
-]));
+fn curseforge_id(content_type: ContentType) -> &'static str {
+    match content_type {
+        ContentType::ModPack => "4471",
+        ContentType::Shader => "4546",
+        ContentType::Mod => "6",
+        ContentType::ResourcePack => "12",
+        ContentType::World => "17",
+        ContentType::DataPack => ""
+    }
+}
 
 const API_KEY: &str = "$2a$10$VhDVvjRWDxOlbRnuqi1GEOCxcZ.fZGRLf2kg7pdN8i4dowykR4huy";
 
@@ -79,7 +86,7 @@ struct ModAsset {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CurseforgeMod {
+pub struct CurseforgeMod {
     id: usize,
     game_id: usize,
     name: String,
@@ -133,7 +140,7 @@ enum RelationType {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CurseforgeModFile {
+pub struct CurseforgeModFile {
     id: usize,
     mod_id: usize,
     is_available: bool,
@@ -200,13 +207,14 @@ impl CurseforgeModFile {
 
 #[async_trait]
 impl Content for CurseforgeMod {
+    type V = CurseforgeModFile;
     /**
      * List versions.
      * @param forVersion The Minecraft version you download for.
      * @throws RequestError
      */
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_>>, launcher: &LauncherContext) -> Result<Vec<Box<dyn ContentVersion>>> {
-        let mut ret: Vec<Box<dyn ContentVersion>> = Vec::new();
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<CurseforgeModFile>> {
+        let mut ret: Vec<CurseforgeModFile> = Vec::new();
         let mut index = 0;
         loop {
             let query = if let Some(v) = for_version {
@@ -215,7 +223,7 @@ impl Content for CurseforgeMod {
                 let mut ret = vec![];
                 #[cfg(feature="mod_loaders")]
                 if let Some(loader) = loader {
-                    ret.push(("modLoaderType", LOADER_TO_CURSEFORGE[&loader.name].to_string()))
+                    ret.push(("modLoaderType", component_to_curseforge(loader.name).to_string()))
                 }
                 if let Some(vers) = &v.extra_data.version {
                     ret.push(("gameVersion", vers.clone()));
@@ -227,7 +235,7 @@ impl Content for CurseforgeMod {
             };
             let versions: DataWrapped<Vec<CurseforgeModFile>> = launcher.http_client.get(format!("https://api.curseforge.com/v1/mods/{}/files", self.id)).header("x-api-key", API_KEY).query(&query).send().await?.json().await?;
             let length = versions.data.len();
-            let versions: Vec<_> = versions.data.into_iter().filter(|v|v.is_available).map(Box::new).map(|v|v as Box<dyn ContentVersion>).collect();
+            let versions: Vec<_> = versions.data.into_iter().filter(|v|v.is_available).collect();
             index += 50;
             ret.extend(versions);
             if length < 50 {
@@ -270,7 +278,7 @@ impl Content for CurseforgeMod {
     fn get_other_information(&self) -> HashMap<String, String> {
         let mut ret = HashMap::new();
         ret.insert("downloads".to_string(), self.download_count.to_string());
-        ret.insert("authors".to_string(), self.authors.iter().map(|v|v.name.clone()).intersperse(", ".to_string()).collect());
+        ret.insert("authors".to_string(), self.authors.iter().map(|v|v.name.clone()).collect::<Vec<_>>().join(","));
         ret.insert("published".to_string(), self.date_created.clone());
         ret.insert("modified".to_string(), self.date_modified.clone());
         ret.insert("updated".to_string(), self.date_released.clone());
@@ -293,6 +301,7 @@ impl Content for CurseforgeMod {
 
 #[async_trait]
 impl ContentVersion for CurseforgeModFile {
+    type C = CurseforgeMod;
     fn get_version_file_url(&self) -> String {
         self.download_url.as_ref().unwrap().clone()
     }
@@ -309,14 +318,14 @@ impl ContentVersion for CurseforgeModFile {
     fn get_version_number(&self) -> String {
         self.display_name.clone()
     }
-    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency>> {
-        let mut deps: Vec<ContentDependency> = Vec::new();
+    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<CurseforgeMod>>> {
+        let mut deps: Vec<ContentDependency<_>> = Vec::new();
         for i in &self.dependencies {
             if RelationType::RequiredDependency != i.relation_type {
                 continue;
             }
             let a = ContentDependency::Content(
-                Box::new(CurseforgeMod::from_id(&i.mod_id.to_string(), &launcher).await?) as Box<dyn Content>
+                CurseforgeMod::from_id(&i.mod_id.to_string(), &launcher).await?
             );
             deps.push(a);
         }
@@ -326,6 +335,7 @@ impl ContentVersion for CurseforgeModFile {
 
 #[async_trait]
 impl ContentService for CurseforgeContentService {
+    type C = CurseforgeMod;
     async fn search_content(
         &self,
         name: &str,
@@ -333,15 +343,15 @@ impl ContentService for CurseforgeContentService {
         limit: usize,
         kind: super::ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation<'_>>,
+        for_version: Option<&MinecraftInstallation>,
         launcher: &LauncherContext
-    ) -> Result<Vec<Box<dyn Content>>> {
+    ) -> Result<Vec<CurseforgeMod>> {
         if ContentType::DataPack == kind {
             return Ok(vec![]);
         }
         let mut query = vec![
             ("gameId", "432".to_string()),
-            ("classId", CONTENT_TYPE_TO_CURSEFORGE[&kind].to_string()),
+            ("classId", curseforge_id(kind).to_string()),
             ("searchFilter", name.to_string()),
             ("index", skip.to_string()),
             ("pageSize", limit.to_string()),
@@ -353,26 +363,26 @@ impl ContentService for CurseforgeContentService {
             }
             #[cfg(feature="mod_loaders")]
             if let Some(loader) = v.extra_data.components.get(0) {
-                query.push(("modLoaderType", LOADER_TO_CURSEFORGE[&loader.name].to_string()));
+                query.push(("modLoaderType", component_to_curseforge(loader.name).to_string()));
             }
         }
         let results: DataWrapped<Vec<CurseforgeMod>> = launcher.http_client.get("https://api.curseforge.com/v1/mods/search").header("x-api-key", API_KEY).query(&query).send().await?.json().await?;
-        Ok(results.data.into_iter().map(|v|Box::new(v) as Box<dyn Content>).collect())
+        Ok(results.data.into_iter().collect())
     }
-    
+
     fn get_unsupported_content_types(&self) -> Vec<ContentType>  {
         vec![ContentType::DataPack]
     }
-    
+
     fn get_sort_fields(&self) -> Vec<String> {
         vec!["featured".to_string(), "popularity".to_string(), "last_updated".to_string(), "name".to_string(), "author".to_string(), "total_downloads".to_string(), "category".to_string(), "game_version".to_string()]
     }
-    
+
     fn get_default_sort_field(&self) -> String {
         "featured".to_string()
     }
-    
-    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<Box<dyn ContentVersion>>> {
+
+    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<CurseforgeModFile>> {
         let mut data = String::new();
         File::open(path).await?.read_to_string(&mut data).await?;
         let data = data.into_bytes().into_iter().filter(|v|[0x9, 0xa, 0xd, 0x20].contains(v)).collect::<Vec<_>>();
@@ -384,15 +394,15 @@ impl ContentService for CurseforgeContentService {
         if exact_matches.len() == 0 {
             Ok(None)
         } else {
-            Ok(Some(Box::new(serde_json::from_value::<CurseforgeModFile>(exact_matches[0]["file"].clone())?) as Box<dyn ContentVersion>))
+            Ok(Some(serde_json::from_value::<CurseforgeModFile>(exact_matches[0]["file"].clone())?))
         }
     }
 
-    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<Box<dyn Content>>> {
-        Ok(Some(Box::new(CurseforgeMod::from_id(id, launcher).await?)))
+    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<CurseforgeMod>> {
+        Ok(Some(CurseforgeMod::from_id(id, launcher).await?))
     }
 
-    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<Box<dyn ContentVersion>>> {
-        Ok(Some(Box::new(CurseforgeModFile::from_id(content_id, id, launcher).await?)))
+    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<CurseforgeModFile>> {
+        Ok(Some(CurseforgeModFile::from_id(content_id, id, launcher).await?))
     }
 }

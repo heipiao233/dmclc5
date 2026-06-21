@@ -1,7 +1,7 @@
-use std::{path::Path, process::Stdio};
+use std::{path::Path, process::Stdio, sync::Arc};
 
 use anyhow::Result;
-use dmclc5::{minecraft::schemas::VersionList, utils::DownloadAllMessage, LauncherContext, StdioUserInterface};
+use dmclc5::{LauncherContext, StdioUserInterface, minecraft::{login::{Account, offline::OfflineAccount}, schemas::VersionList}, utils::DownloadAllMessage};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -33,7 +33,7 @@ async fn real_main() -> Result<()> {
     let launcher = {
         let mut launcher = LauncherContext::new(Path::new("./test"), StdioUserInterface).await?;
         launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
-        launcher
+        Arc::new(launcher)
     };
     let (tx, mut rx) = mpsc::unbounded_channel();
     let message_handler = async move {
@@ -42,10 +42,9 @@ async fn real_main() -> Result<()> {
             handle_msg(next, &mut count).await;
         }
     };
-    let mc = vers.find_by_id("1.20.6").unwrap().install(&launcher, "1.20.6", tx);
+    let mc = vers.find_by_id("1.20.6").unwrap().install(launcher, "1.20.6", tx);
     let mc = tokio::join!(message_handler, mc).1?;
-    let account = &mut *launcher.account_types["offline"].create_empty();
-    account.login(&launcher).await?;
+    let mut account: Account = OfflineAccount("testing".to_string()).into();
     if let Some(c) = &mc.extra_data.before_command {
         let command: Vec<&str> = c.split(" ").collect();
         Command::new(command[0])
@@ -63,7 +62,7 @@ async fn real_main() -> Result<()> {
             handle_msg(next, &mut count).await;
         }
     };
-    let args = mc.launch_args(account, tx);
+    let args = mc.launch_args(&mut account, tx);
     let args = tokio::join!(msg_handler, args).1?;
     Command::new(mc.extra_data.with_java.as_ref().map_or("java", String::as_str))
         .args(args)
