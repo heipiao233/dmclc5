@@ -7,9 +7,8 @@ pub mod curseforge;
 use std::collections::HashMap;
 
 use anyhow::Result;
-use async_trait::async_trait;
 
-use crate::{minecraft::version::MinecraftInstallation, utils::BetterPath, LauncherContext};
+use crate::{LauncherContext, future, minecraft::version::MinecraftInstallation, utils::BetterPath};
 
 /// Type of contents.
 #[derive(PartialEq, Eq, Hash)]
@@ -32,18 +31,17 @@ pub struct Screenshot {
 }
 
 /// Represents a `content`.
-#[async_trait]
-pub trait Content: Send + Sync {
+pub trait Content {
     /// type of [ContentVersion] provided by this type of [Content].
     type V: ContentVersion;
     /// List downloadable versions.
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<Self::V>>;
+    fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> future!(Result<Vec<Self::V>>);
     /// Get title.
     fn get_title(&self) -> String;
     /// Get description.
     fn get_description(&self) -> String;
     /// Get content body article in HTML.
-    async fn get_body(&self, launcher: &LauncherContext) -> Result<String>;
+    fn get_body(&self, launcher: &LauncherContext) -> future!(Result<String>);
     /// Get icon url.
     fn get_icon_url(&self) -> Option<String>;
     /// Get url for issue, Discord, source....
@@ -62,8 +60,7 @@ pub trait Content: Send + Sync {
 /**
  * A content version.
  */
-#[async_trait]
-pub trait ContentVersion: Send + Sync {
+pub trait ContentVersion {
     /// type of [Content] providing this type of [ContentVersion].
     type C: Content<V = Self>;
     /// Get file url.
@@ -73,11 +70,11 @@ pub trait ContentVersion: Send + Sync {
     /// Get file name.
     fn get_version_file_name(&self) -> String;
     /// Get changelog in HTML.
-    async fn get_version_changelog(&self, launcher: &LauncherContext) -> Result<String>;
+    fn get_version_changelog(&self, launcher: &LauncherContext) -> future!(Result<String>);
     /// Get version number.
     fn get_version_number(&self) -> String;
     /// List the dependencies.
-    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<Self::C>>>;
+    fn list_dependencies(&self, launcher: &LauncherContext) -> future!(Result<Vec<ContentDependency<Self::C>>>);
 }
 
 /// Represents the dependencies.
@@ -90,12 +87,11 @@ pub enum ContentDependency<C: Content>
 }
 
 /// A service (website) that provides contents like CurseForge and Modrinth.
-#[async_trait]
-pub trait ContentService: Send + Sync {
+pub trait ContentService {
     /// type of [Content] provided by this [ContentService].
     type C: Content;
     /// Search for contents.
-    async fn search_content(
+    fn search_content(
         &self,
         name: &str,
         skip: usize,
@@ -104,7 +100,7 @@ pub trait ContentService: Send + Sync {
         sort_field: usize,
         for_version: Option<&MinecraftInstallation>,
         launcher: &LauncherContext
-    ) -> Result<Vec<Self::C>>;
+    ) -> future!(Result<Vec<Self::C>>);
     /// Get unsupported [ContentType]s.
     fn get_unsupported_content_types(&self) -> Vec<ContentType>;
     /// Get all sort fields.
@@ -112,11 +108,11 @@ pub trait ContentService: Send + Sync {
     /// Get the default sort field.
     fn get_default_sort_field(&self) -> String;
     /// Get a [ContentVersion] from a file.
-    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<<Self::C as Content>::V>>;
+    fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> future!(Result<Option<<Self::C as Content>::V>>);
 
     /// Get a [Content] by ID.
-    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<Self::C>>;
+    fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> future!(Result<Option<Self::C>>);
 
     /// Get a [ContentVersion] by ID.
-    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<<Self::C as Content>::V>>;
+    fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> future!(Result<Option<<Self::C as Content>::V>>);
 }

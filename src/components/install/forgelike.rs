@@ -3,7 +3,6 @@
 use std::{collections::HashMap, ffi::OsString, io::Read, path::PathBuf, process::Stdio};
 
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use fs_extra::dir::CopyOptions;
 use osstrtools_fix::Bytes;
 use serde::{Deserialize, Serialize};
@@ -70,7 +69,7 @@ enum InstallerProfile {
 }
 
 /// A Forge-like installer.
-pub trait ForgeLikeInstallerTrait: Send + Sync {
+pub trait ForgeLikeInstallerTrait {
     /// Returns true if it supports old install_profile.json. (Installer for Forge <= 1.12)
     const SUPPORTS_OLDER_VERSION: bool;
     /// Returns the Maven group url in the repository.
@@ -90,7 +89,6 @@ pub trait ForgeLikeInstallerTrait: Send + Sync {
 #[derive(Clone, Copy)]
 pub struct ForgeLikeInstaller<T: ForgeLikeInstallerTrait>(pub(in crate::components::install) T);
 
-#[async_trait]
 impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller<T> {
 
     #[cfg(feature = "mod_loaders")]

@@ -1,11 +1,10 @@
 use std::{ffi::OsString, fmt::Display};
 
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, YggdrasilAccountTrait}, version::MinecraftInstallation}, utils::{BetterPath, download}};
+use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccountTrait, YggdrasilAuthInfo}, version::MinecraftInstallation}, utils::{BetterPath, download}};
 
 use super::YggdrasilUserData;
 
@@ -22,7 +21,6 @@ impl Display for MinecraftUniversalLoginAccount {
     }
 }
 
-#[async_trait]
 impl YggdrasilAccountTrait for MinecraftUniversalLoginAccount {
     fn get_data(&self) -> &YggdrasilUserData {
         &self.data
@@ -42,11 +40,13 @@ impl YggdrasilAccountTrait for MinecraftUniversalLoginAccount {
 }
 
 impl MinecraftUniversalLoginAccount {
-    /// Create a new [MinecraftUniversalLoginAccount] with credentials.
-    pub async fn login(launcher: &LauncherContext, server_id: String, username: String, password: String) -> Result<Self> {
-        Ok(Self {
-            data: yggdrasil::login(launcher, format!("https://auth.mc-user.com:233/{server_id}"), username, password).await?,
-            server_id
-        })
+    /// Login to MinecraftUniversalLogin, return tokens and profiles.
+    pub async fn auth(launcher: &LauncherContext, server_id: String, username: String, password: String) -> Result<(YggdrasilAuthInfo, Vec<Profile>)> {
+        yggdrasil::auth(launcher, format!("https://auth.mc-user.com:233/{server_id}"), username, password).await
+    }
+
+    /// Create a [MinecraftUniversalLoginAccount] with authenicated tokens and selected profile from [Self::auth]
+    pub fn new(auth_info: YggdrasilAuthInfo, profile: Profile, server_id: String) -> MinecraftUniversalLoginAccount {
+        Self { data: YggdrasilUserData::new(auth_info, profile), server_id }
     }
 }

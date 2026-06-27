@@ -6,7 +6,6 @@ pub(crate) mod ali;
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::{Result, anyhow};
-use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
@@ -29,8 +28,9 @@ pub struct YggdrasilUserData {
     at: String
 }
 
+/// A Yggdrasil account profile, with dedicated game nickname, skin and cape.
 #[derive(Deserialize, Serialize)]
-struct Profile {
+pub struct Profile {
     id: Uuid,
     name: String
 }
@@ -40,7 +40,7 @@ struct Profile {
 struct AuthResponse {
     access_token: String,
     client_token: String,
-    available_profiles: Vec<Profile>
+    pub available_profiles: Vec<Profile>
 }
 
 /// A kind of [Account] that Mojang uses before the migration. Used by some servers.
@@ -65,9 +65,8 @@ impl Display for YggdrasilAccount {
     }
 }
 
-#[async_trait]
 #[enum_dispatch(YggdrasilAccount)]
-trait YggdrasilAccountTrait: Send + Sync + Display {
+trait YggdrasilAccountTrait: Display {
     /// Get the [YggdrasilUserData].
     fn get_data(&self) -> &YggdrasilUserData;
     /// Get the API url.
@@ -80,7 +79,6 @@ trait YggdrasilAccountTrait: Send + Sync + Display {
     async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>>;
 }
 
-#[async_trait]
 impl AccountTrait for YggdrasilAccount {
 
     async fn check(&mut self, launcher: &LauncherContext) -> bool {
@@ -130,7 +128,16 @@ impl AccountTrait for YggdrasilAccount {
     }
 }
 
-async fn login(launcher: &LauncherContext, api_url: String, username: String, password: String) -> Result<YggdrasilUserData> {
+/// Yggdrasil authenication info, including tokens.
+pub struct YggdrasilAuthInfo {
+    access_token: String,
+    client_token: String,
+    api_url: String,
+    server_name: String
+}
+
+/// Login to a Yggdrasil server, return tokens and profiles.
+pub async fn auth(launcher: &LauncherContext, api_url: String, username: String, password: String) -> Result<(YggdrasilAuthInfo, Vec<Profile>)> {
     let http = &launcher.http_client;
 
     let meta: Value = http.get(&api_url).send().await?.json().await?;
@@ -152,14 +159,24 @@ async fn login(launcher: &LauncherContext, api_url: String, username: String, pa
         return Err(anyhow!("Yggdrasil auth returned error code {}", auth_res.status())); // TODO: i18n
     }
     let auth_res: AuthResponse = auth_res.json().await?;
-    let profile_id = launcher.ui.ask_user_choose(auth_res.available_profiles.iter().map(|i|i.name.as_str()).collect(), "Please select profile").await.ok_or(anyhow!("User cancelled"))?; // TODO: i18n
-    let profile = &auth_res.available_profiles[profile_id];
-    Ok(YggdrasilUserData {
-        api_url,
-        server_name,
+    Ok((YggdrasilAuthInfo {
+        access_token: auth_res.access_token,
         client_token: auth_res.client_token,
-        name: profile.name.clone(),
-        uuid: profile.id,
-        at: auth_res.access_token
-    })
+        api_url,
+        server_name
+    }, auth_res.available_profiles))
+}
+
+impl YggdrasilUserData {
+    /// Create a [YggdrasilUserData] with authenicated tokens and selected profile from [yggdrasil::auth]
+    pub fn new(auth_info: YggdrasilAuthInfo, profile: Profile) -> YggdrasilUserData {
+        Self {
+            api_url: auth_info.api_url,
+            server_name: auth_info.server_name,
+            client_token: auth_info.client_token,
+            name: profile.name,
+            uuid: profile.id,
+            at: auth_info.access_token
+        }
+    }
 }

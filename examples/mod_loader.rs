@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
 
-use dmclc5::{LauncherContext, StdioUserInterface, components::install::fabriclike::FABRIC_INSTALLER, minecraft::schemas::VersionList, utils::{BetterPath, DownloadAllMessage, download}};
+use dmclc5::{LauncherContext, components::install::fabriclike::FABRIC_INSTALLER, minecraft::schemas::VersionList, utils::{BetterPath, DownloadAllMessage, download}};
 use tokio::sync::mpsc;
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -29,7 +29,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 #[tokio::main]
 async fn main() {
-    let launcher = Arc::new(LauncherContext::new(Path::new("./test"), StdioUserInterface).await.unwrap());
+    let launcher = Arc::new(LauncherContext::new(Path::new("./test")).await.unwrap());
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
         let mut count = 0;

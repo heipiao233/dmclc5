@@ -9,21 +9,17 @@ license = "GPL-3.0"
 repository = "https://github.com/heipiao233/dmclc5"
 
 [dependencies]
-acc_reader = { version = "2", optional = true }
 anyhow = "1"
 async-fetcher = "0.12.0"
-async-trait = "0.1"
 base64 = "0.22"
 digest-io = "0.1.0"
 enum_dispatch = "0.3.13"
-erased-serde = "0.4"
 form_urlencoded = { version = "1", optional = true }
 fs_extra = { version = "1", optional = true }
 futures = { version = "0.3", optional = true }
 futures-util = { version = "0.3", features = ["io"] }
 hex = "0.4.3"
 join-string = "0.3.0"
-map-macro = "0.3"
 markdown-it = { version = "0.6", optional = true }
 md5 = "0.8"
 murmur2 = { version = "0.1", optional = true }
@@ -48,7 +44,7 @@ zip = "8"
 
 [features]
 components_installation = ["dep:form_urlencoded", "dep:fs_extra", "dep:tempfile", "dep:xmltree"]
-mod_loaders = ["components_installation", "dep:acc_reader", "dep:toml", "dep:versions"]
+mod_loaders = ["components_installation", "dep:toml", "dep:versions"]
 content_services = ["dep:futures", "dep:markdown-it", "dep:murmur2", "dep:serde_repr"]
 msa_auth = ["dep:open"]
 

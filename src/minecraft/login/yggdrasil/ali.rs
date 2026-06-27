@@ -1,13 +1,12 @@
 use std::{ffi::OsString, fmt::Display};
 
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::Sha256;
 use base64::prelude::*;
 
-use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, YggdrasilAccountTrait}, version::MinecraftInstallation}, utils::{BetterPath, check_hash, download}};
+use crate::{LauncherContext, minecraft::{login::yggdrasil::{Profile, YggdrasilAccountTrait, YggdrasilAuthInfo}, version::MinecraftInstallation}, utils::{BetterPath, check_hash, download}};
 
 use super::YggdrasilUserData;
 
@@ -24,9 +23,7 @@ impl Display for AuthlibInjectorAccount {
     }
 }
 
-#[async_trait]
 impl YggdrasilAccountTrait for AuthlibInjectorAccount {
-
     fn get_data(&self) -> &YggdrasilUserData {
         &self.data
     }
@@ -53,10 +50,8 @@ impl YggdrasilAccountTrait for AuthlibInjectorAccount {
 }
 
 impl AuthlibInjectorAccount {
-    /// Create a new [AuthlibInjectorAccount] with credentials.
-    pub async fn login(launcher: &LauncherContext, api_url: String, username: String, password: String) -> Result<Self> {
-        Ok(Self {
-            data: yggdrasil::login(launcher, api_url, username, password).await?
-        })
+    /// Create a [AuthlibInjectorAccount] with authenicated tokens and selected profile from [yggdrasil::auth]
+    pub fn new(auth_info: YggdrasilAuthInfo, profile: Profile) -> AuthlibInjectorAccount {
+        Self { data: YggdrasilUserData::new(auth_info, profile) }
     }
 }

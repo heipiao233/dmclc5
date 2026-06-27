@@ -8,7 +8,6 @@ pub mod offline;
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::Result;
-use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use uuid::Uuid;
 
@@ -40,9 +39,9 @@ impl Display for Account {
 }
 
 /// The interface of [Account]
-#[async_trait]
 #[enum_dispatch(Account)]
-pub trait AccountTrait: Display + Send + Sync {
+#[allow(async_fn_in_trait)]
+pub trait AccountTrait: Display {
 
     /// Refresh access token and check if this account can be used now.
     /// If this account is not initialized it should return false;

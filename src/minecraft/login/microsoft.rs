@@ -3,7 +3,6 @@
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::{anyhow, Ok, Result};
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -188,7 +187,6 @@ impl Display for MicrosoftAccount {
     }
 }
 
-#[async_trait]
 impl AccountTrait for MicrosoftAccount {
 
     async fn check(&mut self, launcher: &LauncherContext) -> bool {

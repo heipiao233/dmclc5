@@ -2,7 +2,6 @@
 
 
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
@@ -12,13 +11,13 @@ use super::ComponentInstallerTrait;
 
 /// A [ComponentInstaller] implementation for Fabric-like components.
 /// We don't install Fabric API or QSL.
-#[async_trait]
-pub trait FabricLikeInstallerTrait: Send + Sync {
+pub trait FabricLikeInstallerTrait {
     /// Metadata API URL
     const META_URL: &'static str;
     /// Maven artifact name of the loader jar, which can indicate the version.
     const LOADER_ARTIFACT_NAME: &'static str;
     #[cfg(feature = "mod_loaders")]
+    #[allow(async_fn_in_trait)]
     /// Get the mod loaders the component provides.
     async fn get_loader(version: &str, launcher: &LauncherContext) -> Result<Vec<ModLoader>>;
 }
@@ -38,7 +37,6 @@ struct Version {
 #[derive(Clone, Copy)]
 pub struct FabricInstaller;
 
-#[async_trait]
 impl FabricLikeInstallerTrait for FabricInstaller {
     const META_URL: &'static str = "https://meta.fabricmc.net/v2";
     const LOADER_ARTIFACT_NAME: &'static str = "fabric-loader";
@@ -62,7 +60,6 @@ impl FabricLikeInstallerTrait for FabricInstaller {
 #[derive(Clone, Copy)]
 pub struct QuiltInstaller;
 
-#[async_trait]
 impl FabricLikeInstallerTrait for QuiltInstaller {
     const META_URL: &'static str = "https://meta.quiltmc.org/v3";
     const LOADER_ARTIFACT_NAME: &'static str = "quilt-loader";
@@ -93,7 +90,6 @@ pub static FABRIC_INSTALLER: ComponentInstaller = ComponentInstaller::Fabric(Fab
 /// The Quilt Loader component type
 pub static QUILT_INSTALLER: ComponentInstaller = ComponentInstaller::Quilt(FabricLikeInstaller(QuiltInstaller));
 
-#[async_trait]
 impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstaller<T> {
     #[cfg(feature = "mod_loaders")]
     async fn get_mod_loaders(&self, version: &str, launcher: &LauncherContext) -> Result<Vec<ModLoader>> {

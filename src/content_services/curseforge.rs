@@ -3,7 +3,6 @@
 use std::{collections::HashMap, fmt::Debug};
 
 use anyhow::Result;
-use async_trait::async_trait;
 use murmur2::murmur2;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -210,7 +209,6 @@ impl CurseforgeModFile {
     }
 }
 
-#[async_trait]
 impl Content for CurseforgeMod {
     type V = CurseforgeModFile;
     /**
@@ -304,7 +302,6 @@ impl Content for CurseforgeMod {
     }
 }
 
-#[async_trait]
 impl ContentVersion for CurseforgeModFile {
     type C = CurseforgeMod;
     fn get_version_file_url(&self) -> String {
@@ -338,7 +335,6 @@ impl ContentVersion for CurseforgeModFile {
     }
 }
 
-#[async_trait]
 impl ContentService for CurseforgeContentService {
     type C = CurseforgeMod;
     async fn search_content(

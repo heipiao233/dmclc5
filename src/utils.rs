@@ -257,3 +257,11 @@ pub fn json_newline_transform(source: &str) -> String {
     }
     result.into_iter().collect()
 }
+
+/// Generates a impl Future type to replace `async` in traits.
+#[macro_export]
+macro_rules! future {
+    ($ty:ty) => {
+        impl Future<Output = $ty> + Send
+    };
+}

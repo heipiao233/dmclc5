@@ -4,7 +4,6 @@
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::Result;
-use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
 
@@ -21,7 +20,6 @@ impl Display for OfflineAccount {
     }
 }
 
-#[async_trait]
 impl AccountTrait for OfflineAccount {
 
     async fn check(&mut self, _: &LauncherContext) -> bool {

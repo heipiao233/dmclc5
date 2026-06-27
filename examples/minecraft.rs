@@ -1,7 +1,7 @@
 use std::{path::Path, process::Stdio, sync::Arc};
 
 use anyhow::Result;
-use dmclc5::{LauncherContext, StdioUserInterface, minecraft::{login::{Account, offline::OfflineAccount}, schemas::VersionList}, utils::DownloadAllMessage};
+use dmclc5::{LauncherContext, minecraft::{login::{Account, offline::OfflineAccount}, schemas::VersionList}, utils::DownloadAllMessage};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -31,7 +31,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
     let launcher = {
-        let mut launcher = LauncherContext::new(Path::new("./test"), StdioUserInterface).await?;
+        let mut launcher = LauncherContext::new(Path::new("./test")).await?;
         launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
         Arc::new(launcher)
     };

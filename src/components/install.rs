@@ -9,7 +9,6 @@ pub mod fabriclike;
 use std::str::FromStr;
 
 use anyhow::{anyhow, Result};
-use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use tokio::sync::mpsc;
 
@@ -18,9 +17,9 @@ use crate::components::mods::ModLoader;
 use crate::{LauncherContext, components::install::{fabriclike::{FABRIC_INSTALLER, FabricInstaller, FabricLikeInstaller, QUILT_INSTALLER, QuiltInstaller}, forge::{FORGE_INSTALLER, ForgeInstaller}, forgelike::ForgeLikeInstaller, neoforge::{NEOFORGE_INSTALLER, NeoForgeInstaller}}, minecraft::{schemas::VersionJSON, version::{ComponentInfo, MinecraftInstallation}}, utils::DownloadAllMessage};
 
 /// The interface for [ComponentInstaller].
-#[async_trait]
+#[allow(async_fn_in_trait)]
 #[enum_dispatch(ComponentInstaller)]
-pub trait ComponentInstallerTrait: Send + Sync {
+pub trait ComponentInstallerTrait {
     /// Get suitable versions for a [MinecraftInstallation].
     async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation) -> Result<Vec<String>>;
 

@@ -3,7 +3,6 @@
 use std::{collections::HashMap, fmt::Debug, sync::LazyLock};
 
 use anyhow::{anyhow, Error, Result};
-use async_trait::async_trait;
 use futures_util::io::AllowStdIo;
 use markdown_it::MarkdownIt;
 use reqwest::StatusCode;
@@ -240,7 +239,6 @@ impl ModrinthContentVersion {
     }
 }
 
-#[async_trait]
 impl Content for ModrinthProject {
     type V = ModrinthContentVersion;
     /**
@@ -332,7 +330,6 @@ impl ModrinthContentVersion {
     }
 }
 
-#[async_trait]
 impl ContentVersion for ModrinthContentVersion {
     type C = ModrinthProject;
     fn get_version_file_url(&self) -> String {
@@ -373,7 +370,6 @@ impl ContentVersion for ModrinthContentVersion {
     }
 }
 
-#[async_trait]
 impl ContentService for ModrinthContentService {
     type C = ModrinthProject;
     async fn search_content(

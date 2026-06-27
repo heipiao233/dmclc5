@@ -2,15 +2,12 @@
 
 //! A Minecraft launcher library.
 
-use std::{collections::HashMap, io::Write, path::Path, sync::Arc};
+use std::{io::Write, path::Path, sync::Arc};
 
 use anyhow::{Ok, Result};
-use async_trait::async_trait;
-use futures_util::StreamExt;
 use minecraft::{schemas::VersionJSON, version::MinecraftInstallation};
 use reqwest::Client;
 use tokio::{fs::{self, create_dir_all}, io::AsyncWriteExt};
-use tokio_util::codec::{FramedRead, LinesCodec};
 use utils::{osstr_concat, BetterPath};
 
 use crate::utils::merge_version_json;
@@ -36,7 +33,6 @@ pub struct LauncherContext {
     #[cfg(feature="msa_auth")]
     ms_client_id: String,
     http_client: Client,
-    ui: Box<dyn UserInterface>,
     /// A HashMap of [AccountConstructor]s.
     // pub account_types: HashMap<String, Box<dyn AccountConstructor>>,
     /// Max download retry times.
@@ -49,92 +45,6 @@ pub struct LauncherContext {
     pub bmclapi_mirror: Option<String>
 }
 
-/// A trait for interacting with users that should be implemented by the client.
-/// # Examples
-/// See [StdioUserInterface] for example.
-#[async_trait]
-pub trait UserInterface: Send + Sync {
-    /// Asks the user some questions.
-    ///
-    /// # Arguments
-    /// * `questions` - A vector of questions. The first element in the tuple is the keys of the return value. and the second is what you should show to your user.
-    /// * `msg` - An optional message to user.
-    ///
-    /// # Returns
-    /// A HashMap. The keys are the first element of each item in the argument `questions`, the values is the answers from the user for each questions.
-    async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> Option<HashMap<String, String>>;
-
-    /// Asks the user a question.
-    async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> Option<String>;
-
-    /// Asks the user to choose one choice.
-    ///
-    /// # Arguments
-    /// * `msg` - The question.
-    ///
-    /// # Returns
-    /// The index of `choices`.
-    async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> Option<usize>;
-
-    /// Shows a information to the user.
-    async fn info(&self, msg: &str, title: &str);
-
-    /// Shows a warning to the user.
-    async fn warn(&self, msg: &str, title: &str);
-
-    /// Shows an error to the user.
-    async fn error(&self, msg: &str, title: &str);
-}
-
-/// An example implementation of [UserInterface]
-/// It is for some simple use cases.
-pub struct StdioUserInterface;
-
-#[async_trait]
-impl UserInterface for StdioUserInterface {
-    async fn ask_user(&self, questions: Vec<(&str, &str)>, msg: Option<&str>) -> Option<HashMap<String, String>> {
-        if let Some(msg) = msg {
-            println!("{msg}");
-        }
-        let mut res = HashMap::<String, String>::new();
-        let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
-        for (k, v) in questions {
-            println!("{v}: ");
-            res.insert(k.to_string(), stdin.next().await.unwrap().unwrap());
-        }
-        Some(res)
-    }
-    async fn ask_user_one(&self, question: &str, msg: Option<&str>) -> Option<String> {
-        if let Some(msg) = msg {
-            println!("{msg}");
-        }
-        println!("{question}: ");
-        let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
-        return Some(stdin.next().await
-            .unwrap().unwrap().to_string());
-    }
-
-    async fn ask_user_choose(&self, choices: Vec<&str>, msg: &str) -> Option<usize> {
-        println!("{msg}");
-        for (index, i) in choices.iter().enumerate() {
-            println!("{index}. {i}");
-        }
-        println!("Please choose: ");
-        let mut stdin = FramedRead::new(tokio::io::stdin(), LinesCodec::new());
-        return Some(stdin.next().await.unwrap().unwrap().parse().unwrap());
-    }
-
-    async fn info(&self, msg: &str, title: &str) {
-        println!("INFO: {title} {msg}");
-    }
-    async fn warn(&self, msg: &str, title: &str) {
-        eprintln!("WARN: {title} {msg}");
-    }
-    async fn error(&self, msg: &str, title: &str) {
-        eprintln!("ERROR: {title} {msg}");
-    }
-}
-
 impl LauncherContext {
 
     /// Creates a new [LauncherContext].
@@ -143,7 +53,7 @@ impl LauncherContext {
     /// * `root_path` - The `.minecraft` directory.
     #[cfg_attr(feature="msa_auth", doc=r" * `ms_client_id` - The client id for Microsoft auth. See [Microsoft's document](https://docs.microsoft.com/en-us/azure/active-directory/develop/quickstart-register-app).")]
     /// * `ui` - Your implementation of [UserInterface].
-    pub async fn new(mc_path: &Path, #[cfg(feature="msa_auth")] ms_client_id: &str, ui: impl UserInterface + 'static) -> Result<Self> {
+    pub async fn new(mc_path: &Path, #[cfg(feature="msa_auth")] ms_client_id: &str) -> Result<Self> {
         let root_path: BetterPath;
         if let Err(_) | Result::Ok(false) = tokio::fs::try_exists(&mc_path).await {
             tokio::fs::create_dir_all(&mc_path).await?;
@@ -167,7 +77,6 @@ impl LauncherContext {
             #[cfg(feature="msa_auth")]
             ms_client_id: ms_client_id.to_string(),
             http_client: Client::builder().user_agent("heipiao233/dmclc5 (heipiao233@outlook.com)").build()?,
-            ui: Box::new(ui),
             // #[cfg(feature="msa_auth")]
             // account_types: hash_map_e! {
             //     "offline".to_string() => Box::new(OfflineAccountConstructor),
