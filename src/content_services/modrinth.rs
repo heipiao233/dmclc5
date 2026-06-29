@@ -11,7 +11,7 @@ use sha1::{Digest, Sha1};
 use tokio::fs::File;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::{minecraft::version::MinecraftInstallation, utils::BetterPath, LauncherContext};
+use crate::{minecraft::version::MinecraftInstallation, utils::BetterPathBuf, LauncherContext};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 
@@ -434,7 +434,7 @@ impl ContentService for ModrinthContentService {
         "relevance".to_string()
     }
 
-    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
+    async fn get_content_version_from_file(&self, path: &BetterPathBuf, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
         let mut sha1 = AllowStdIo::new(digest_io::IoWrapper(Sha1::new()));
         futures_util::io::copy(File::open(path).await?.compat(), &mut sha1).await?;
         let res = launcher.http_client.get(format!("https://api.modrinth.com/v2/version/version_file/{}?algorithm=sha1", hex::encode_upper(sha1.into_inner().0.finalize()))).send().await?;

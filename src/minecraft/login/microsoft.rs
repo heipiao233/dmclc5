@@ -3,80 +3,55 @@
 use std::{collections::HashMap, ffi::OsString, fmt::Display};
 
 use anyhow::{anyhow, Ok, Result};
+use oauth2::{RefreshToken, Scope, TokenResponse};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
-use tokio::time;
 
-use crate::{LauncherContext, minecraft::{login::AccountTrait, version::MinecraftInstallation}, utils::BetterPath};
+use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}, version::MinecraftInstallation}, utils::BetterPathBuf};
 
-
-const SCOPE: &str = "XboxLive.signin offline_access";
-
-#[derive(Deserialize)]
-struct Step1Response {
-    access_token: String,
-    refresh_token: String
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum Step1ResponseLoop {
-    Successful(Step1Response),
-    Error {
-        error: String
-    }
-}
-
-#[derive(Deserialize)]
-struct DeviceAuthorizationResponse {
-    device_code: String,
-    user_code: String,
-    verification_uri: String,
-    interval: usize,
-    expires_in: usize
-}
-
+/// An official account.
 #[derive(Serialize, Deserialize)]
-pub(crate) struct MicrosoftAccount {
-    refresh_token: String,
+pub struct MicrosoftAccount {
+    #[serde(skip)]
+    refresh_token: Option<String>,
     name: String,
     uuid: Uuid,
     at: String
 }
 
 impl MicrosoftAccount {
-    pub async fn login(launcher: &LauncherContext) -> Result<Self> {
-        let dev_flow: DeviceAuthorizationResponse = launcher.http_client
-            .post("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode")
-            .form(&[("client_id", launcher.ms_client_id.as_str()), ("scope", SCOPE)])
-            .send().await?.json().await?;
-        launcher.ui.info(&t!("accounts.microsoft.message", url = dev_flow.verification_uri, code = dev_flow.user_code), "MSA Login").await; // TODO: i18n
-        let _ = open::that(&dev_flow.verification_uri);
-        let dev_flow_res = Self::loop_for_auth(dev_flow, &launcher).await?;
-        let next = Self::next_steps(&dev_flow_res.access_token, &launcher).await?;
+    /// Begin with a creating of a [MicrosoftAccount]
+    /// Show the [oauth2::StandardDeviceAuthorizationResponse] to your user.
+    pub async fn start_auth(launcher: &LauncherContext) -> Result<oauth2::StandardDeviceAuthorizationResponse> {
+        Ok(launcher.oauth2.exchange_device_code()
+            .add_scope(Scope::new("XboxLive.signin".to_string()))
+            .add_scope(Scope::new("offline_access".to_string()))
+            .request_async(&launcher.http_client).await?)
+    }
+
+    /// Begin with a creating of a [MicrosoftAccount]
+    /// See: [Self::start_auth]
+    pub async fn login(launcher: &LauncherContext, device_auth: &oauth2::StandardDeviceAuthorizationResponse) -> Result<Self> {
+        let dev_flow_res = launcher.oauth2.exchange_device_access_token(&device_auth)
+            .request_async(&launcher.http_client, tokio::time::sleep, None).await?;
+        let next = Self::next_steps(dev_flow_res.access_token().secret(), &launcher).await?;
+        let refresh_token = dev_flow_res.refresh_token().map(RefreshToken::secret).cloned();
+        if let Some(refresh_token) = &refresh_token {
+            keyring::Entry::new(&format!("{} microsoft account", launcher.name), &next.0.to_string())?.set_password(refresh_token)?;
+            println!("credential set for {}", next.0)
+        }
 
         Ok(Self {
-            refresh_token: dev_flow_res.refresh_token,
+            refresh_token,
             name: next.2,
             uuid: next.0,
             at: next.1
         })
     }
 
-    async fn refresh(&mut self, launcher: &LauncherContext) -> Result<()> {
-        let at: Value = launcher.http_client.post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
-            .form(&[("client_id", launcher.ms_client_id.as_str()), ("grant_type", "refresh_token"), ("refresh_token", &self.refresh_token)])
-            .send().await?.json().await?;
-        let refresh_token = at["refresh_token"].as_str().unwrap().to_string();
-        let next = Self::next_steps(at["access_token"].as_str().unwrap(), &launcher).await?;
-        *self = MicrosoftAccount {
-            refresh_token,
-            name: next.2,
-            uuid: next.0,
-            at: next.1
-        };
-        Ok(())
+    fn keyring_entry(&self, launcher: &LauncherContext) -> Result<keyring::Entry> {
+        Ok(keyring::Entry::new(&format!("{} microsoft account", launcher.name), &self.uuid.to_string())?)
     }
 
     async fn next_steps(access_token: &str, launcher: &LauncherContext) -> Result<(Uuid, String, String)> {
@@ -149,36 +124,6 @@ impl MicrosoftAccount {
 
         Ok((uuid, at, name))
     }
-
-    async fn loop_for_auth(flow: DeviceAuthorizationResponse, launcher: &LauncherContext) -> Result<Step1Response> {
-        let start_time = time::Instant::now();
-        let mut interval = time::Duration::from_secs(flow.interval as u64);
-        let expires_in = time::Duration::from_secs(flow.expires_in as u64);
-        loop {
-            time::sleep(interval).await;
-            let estimated = time::Instant::now() - start_time;
-            if estimated >= expires_in {
-                return Result::Err(anyhow!(t!("accounts.microsoft.timeout")).into());
-            }
-            let dev_flow_res: Step1ResponseLoop = launcher.http_client.post("https://login.microsoftonline.com/consumers/oauth2/v2.0/token")
-                .form(&[
-                    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-                    ("code", &flow.device_code),
-                    ("client_id", &launcher.ms_client_id)
-                ]).send().await?.json().await?;
-            if let Step1ResponseLoop::Error { error } = dev_flow_res {
-                match error.as_str() {
-                    "expired_token" => return Result::Err(anyhow!(t!("accounts.microsoft.timeout")).into()),
-                    "authorization_declined" => return Result::Err(anyhow!(t!("accounts.microsoft.canceled")).into()),
-                    "slow_down" => interval += time::Duration::from_secs(5),
-                    "authorization_pending" => continue,
-                    _ => return Result::Err(anyhow!("Token flow error: {error}"))
-                }
-            } else if let Step1ResponseLoop::Successful(res) = dev_flow_res {
-                return Ok(res);
-            }
-        }
-    }
 }
 
 impl Display for MicrosoftAccount {
@@ -188,16 +133,30 @@ impl Display for MicrosoftAccount {
 }
 
 impl AccountTrait for MicrosoftAccount {
-
-    async fn check(&mut self, launcher: &LauncherContext) -> bool {
-        self.refresh(&launcher).await.is_ok()
+    async fn check(self, launcher: &LauncherContext) -> Result<Account> {
+        let refresh_token = if let Some(rt) = self.refresh_token {
+            rt.clone()
+        } else {
+            self.keyring_entry(launcher)?.get_password()?
+        };
+        let at = launcher.oauth2.exchange_refresh_token(&RefreshToken::new(refresh_token))
+            .add_scope(Scope::new("XboxLive.signin".to_string()))
+            .add_scope(Scope::new("offline_access".to_string()))
+            .request_async(&launcher.http_client).await?;
+        let next = Self::next_steps(at.access_token().secret(), &launcher).await?;
+        Ok(MicrosoftAccount {
+            refresh_token: at.refresh_token().map(RefreshToken::secret).cloned(),
+            name: next.2,
+            uuid: next.0,
+            at: next.1
+        }.into())
     }
 
     fn get_uuid(&self) -> Uuid {
         self.uuid
     }
 
-    async fn prepare_launch(&self, _: &BetterPath, _: &LauncherContext) -> Result<()> {
+    async fn prepare_launch(&self, _: &BetterPathBuf, _: &LauncherContext) -> Result<()> {
         Ok(())
     }
 
@@ -205,16 +164,12 @@ impl AccountTrait for MicrosoftAccount {
         Ok(vec![])
     }
 
-    async fn get_launch_game_args(&mut self, launcher: &LauncherContext) -> HashMap<String, String> {
-        let mut map = HashMap::new();
-        let _ = self.refresh(&launcher).await;
-        let at = &self.at;
-        map.insert("${auth_access_token}".to_string(), at.to_string());
-        map.insert("${auth_session}".to_string(), at.to_string());
-        map.insert("${auth_player_name}".to_string(), self.name.to_string());
-        map.insert("${user_type}".to_string(), "msa".to_string());
-        map.insert("${user_properties}".to_string(), "{}".to_string());
-        return map;
+    fn replace_launch_game_arg(&self, arg: &String) -> String {
+        arg.replace("${auth_access_token}", &self.at)
+            .replace("${auth_session}", &self.at)
+            .replace("${auth_player_name}", &self.name)
+            .replace("${user_type}", "msa")
+            .replace("${user_properties}", "{}")
     }
 
     fn get_log_masks(&self) -> Vec<String> {

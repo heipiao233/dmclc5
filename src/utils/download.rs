@@ -1,5 +1,5 @@
 /// Things about downloading.
-use std::{os::unix::fs::MetadataExt, sync::Arc, time::Duration};
+use std::{os::unix::fs::MetadataExt, path::Path, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use async_fetcher::{FetchEvent, Fetcher, Source};
@@ -11,14 +11,14 @@ use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use crate::minecraft::schemas::Resource;
-use super::BetterPath;
+use super::BetterPathBuf;
 
 /// Check the hash of a file.
 ///
 /// # Arguments
 /// * `T` - A hash algorithm like [Sha1] or [Sha256](sha2::Sha256)
-pub async fn check_hash<T: Digest + Update>(path: &BetterPath, digest: &str, size: usize) -> bool {
-    let meta = fs::metadata(path).await;
+pub async fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str, size: usize) -> bool {
+    let meta = fs::metadata(&path).await;
     if meta.is_err() {
         return false;
     }
@@ -31,14 +31,14 @@ pub async fn check_hash<T: Digest + Update>(path: &BetterPath, digest: &str, siz
         if futures_util::io::copy(&mut f.compat(), &mut hash).await.is_err() {
             return false;
         }
-        hex::encode(T::new().finalize()) == digest
+        hex::encode(hash.into_inner().0.finalize()) == digest
     } else {
         false
     }
 }
 
 /// Download a [Resource] to the `path`.
-pub async fn download_res(res: &Resource, path: &BetterPath) -> Result<()> {
+pub async fn download_res(res: &Resource, path: &Path) -> Result<()> {
     if check_hash::<Sha1>(path, &res.sha1, res.size).await {
         return Ok(());
     }
@@ -46,13 +46,13 @@ pub async fn download_res(res: &Resource, path: &BetterPath) -> Result<()> {
 }
 
 /// Messages for download_all in channel.
-pub type DownloadAllMessage = std::result::Result<(BetterPath, FetchEvent), (BetterPath, anyhow::Error)>;
+pub type DownloadAllMessage = std::result::Result<(BetterPathBuf, FetchEvent), (BetterPathBuf, anyhow::Error)>;
 
-async fn check_and_download(path: &BetterPath, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
-    if !check_hash::<Sha1>(path, &res.sha1, res.size).await {
-        let _ = fs::create_dir_all(&path.0.parent().unwrap()).await;
+async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
+    if !check_hash::<Sha1>(&path, &res.sha1, res.size).await {
+        let _ = fs::create_dir_all(&path.as_ref().parent().unwrap()).await;
         Some((Source {
-            dest: Arc::from(path.0.as_path()),
+            dest: Arc::from(path.as_ref()),
             urls,
             part: None
         }, Arc::new(())))
@@ -63,24 +63,23 @@ async fn check_and_download(path: &BetterPath, res: &Resource, urls: Arc<[Box<st
 
 /// Download [Resource]s to paths.
 pub async fn download_all(
-    resources: &Vec<(Resource, BetterPath)>, channel: mpsc::UnboundedSender<DownloadAllMessage>,
+    resources: Vec<(Resource, BetterPathBuf)>, channel: mpsc::UnboundedSender<DownloadAllMessage>,
     threads_per_file: u16, parallel_files: usize, retries: usize,
     mirror: Option<String>
 ) -> Result<()> {
-    let mut check_futures = vec![];
-    for (res, path) in resources {
-        let urls: Arc<[Box<str>]>;
-        if let Some(mirror) = &mirror {
-            urls = Arc::new([Box::from(mirrored(res.url.clone(), mirror.clone()).as_str()), Box::from(res.url.as_str())]);
-        } else {
-            urls = Arc::new([Box::from(res.url.as_str())]);
-        }
-        check_futures.push(check_and_download(path, res, urls));
-    }
-    let sources: Vec<_> = futures_util::future::join_all(check_futures).await
-        .into_iter()
-        .flatten()
-        .collect();
+    let sources = futures_util::stream::iter(resources)
+        .map(move |(res, path)| {
+            let mirrored = mirror.clone().map(|mirror| mirrored(&res.url, mirror));
+            (res, path, mirrored)
+        })
+        .filter_map(async |(res, path, mirrored)| {
+            if let Some(mirrored) = mirrored {
+                let url = res.url.clone();
+                check_and_download(path, &res, Arc::new([Box::from(url.as_str()), Box::from(mirrored.as_str())])).await
+            } else {
+                check_and_download(path, &res, Arc::new([Box::from(res.url.as_str())])).await
+            }
+        });
     let (tx, mut rx) = mpsc::unbounded_channel();
     let mut fetcher = Fetcher::default()
         .events(tx)
@@ -88,26 +87,26 @@ pub async fn download_all(
         .timeout(Duration::from_secs(15))
         .connections_per_file(threads_per_file)
         .build()
-        .stream_from(futures_util::stream::iter(sources), parallel_files * (threads_per_file as usize));
+        .stream_from(sources, parallel_files * (threads_per_file as usize));
     let channel2 = channel.clone();
     let fetch_task = async move {
         while let Some((path, _, result)) = fetcher.next().await {
             if let Err(e) = result {
                 let _ = tokio::fs::remove_file(&path).await;
-                let _ = channel2.send(Err((BetterPath::from(path.to_path_buf()), e.into())));
+                let _ = channel2.send(Err((BetterPathBuf(path.to_path_buf()), e.into())));
             }
         }
     };
     let send_task = async move {
         while let Some((path, _, event)) = rx.recv().await {
-            let _ = channel.send(Ok((BetterPath::from(path.to_path_buf()), event)));
+            let _ = channel.send(Ok((BetterPathBuf(path.to_path_buf()), event)));
         }
     };
     tokio::join!(fetch_task, send_task);
     Ok(())
 }
 
-fn mirrored(url: String, mirror: String) -> String {
+fn mirrored(url: &str, mirror: String) -> String {
     url
         .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
         .replace("libraries.minecraft.net", &format!("{mirror}/maven"))
@@ -131,8 +130,8 @@ pub async fn download_to_writer<URL: IntoUrl, W: AsyncWrite + std::marker::Unpin
 }
 
 /// Download the `url` into the `path`.
-pub async fn download<URL: IntoUrl>(url: URL, path: &BetterPath) -> Result<()> {
-    if let Some(p) = path.0.parent() {
+pub async fn download<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Result<()> {
+    if let Some(p) = path.as_ref().parent() {
         fs::create_dir_all(p).await?;
     }
     let mut file = File::create(path).await?;
@@ -141,9 +140,9 @@ pub async fn download<URL: IntoUrl>(url: URL, path: &BetterPath) -> Result<()> {
 }
 
 /// Download the `url` into the `path`, and return the content.
-pub async fn download_txt<URL: IntoUrl>(url: URL, path: &BetterPath) -> Result<String> {
+pub async fn download_txt<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Result<String> {
     let txt = reqwest::get(url).await?.text().await?;
-    if let Some(p) = path.0.parent() {
+    if let Some(p) = path.as_ref().parent() {
         fs::create_dir_all(p).await?;
     }
     fs::write(path, &txt).await?;

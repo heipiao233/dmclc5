@@ -8,7 +8,7 @@ use std::collections::HashMap;
 
 use anyhow::Result;
 
-use crate::{LauncherContext, future, minecraft::version::MinecraftInstallation, utils::BetterPath};
+use crate::{LauncherContext, future, minecraft::version::MinecraftInstallation, utils::BetterPathBuf};
 
 /// Type of contents.
 #[derive(PartialEq, Eq, Hash)]
@@ -108,7 +108,7 @@ pub trait ContentService {
     /// Get the default sort field.
     fn get_default_sort_field(&self) -> String;
     /// Get a [ContentVersion] from a file.
-    fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> future!(Result<Option<<Self::C as Content>::V>>);
+    fn get_content_version_from_file(&self, path: &BetterPathBuf, launcher: &LauncherContext) -> future!(Result<Option<<Self::C as Content>::V>>);
 
     /// Get a [Content] by ID.
     fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> future!(Result<Option<Self::C>>);

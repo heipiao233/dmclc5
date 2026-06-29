@@ -11,7 +11,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 
 #[cfg(feature="mod_loaders")]
 use crate::components::install::ComponentInstaller;
-use crate::{minecraft::version::MinecraftInstallation, utils::BetterPath, LauncherContext};
+use crate::{minecraft::version::MinecraftInstallation, utils::BetterPathBuf, LauncherContext};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 #[cfg(feature="mod_loaders")]
@@ -383,7 +383,7 @@ impl ContentService for CurseforgeContentService {
         "featured".to_string()
     }
 
-    async fn get_content_version_from_file(&self, path: &BetterPath, launcher: &LauncherContext) -> Result<Option<CurseforgeModFile>> {
+    async fn get_content_version_from_file(&self, path: &BetterPathBuf, launcher: &LauncherContext) -> Result<Option<CurseforgeModFile>> {
         let mut data = String::new();
         File::open(path).await?.read_to_string(&mut data).await?;
         let data = data.into_bytes().into_iter().filter(|v|[0x9, 0xa, 0xd, 0x20].contains(v)).collect::<Vec<_>>();

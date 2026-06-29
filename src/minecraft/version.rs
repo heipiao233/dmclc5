@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::components::COMPONENTS;
 #[cfg(feature="components_installation")]
 use crate::components::install::ComponentInstaller;
-use crate::{LauncherContext, utils::BetterPath};
+use crate::{LauncherContext, utils::BetterPathBuf};
 
 use super::schemas::VersionJSON;
 
@@ -61,13 +61,13 @@ pub struct MinecraftInstallation {
     pub extra_data: DMCLCExtraData,
     pub(crate) launcher: Arc<LauncherContext>,
     pub(crate) name: String,
-    pub(crate) version_launch_work_dir: BetterPath,
-    pub(crate) version_root: BetterPath
+    pub(crate) version_launch_work_dir: BetterPathBuf,
+    pub(crate) version_root: BetterPathBuf
 }
 
 impl MinecraftInstallation {
     pub(crate) fn new(launcher: Arc<LauncherContext>, json: VersionJSON, name: &str, extras: Option<DMCLCExtraData>) -> MinecraftInstallation {
-        let version_root = *(&launcher.root_path / "versions" / name);
+        let version_root = launcher.root_path.clone() / "versions" / name;
         let extra_data = if let Some(e) = extras {
             e
         } else {
@@ -92,9 +92,9 @@ impl MinecraftInstallation {
     fn get_extras(
         #[cfg(feature="mod_loaders")]
         _launcher: &LauncherContext,
-        version_root: &BetterPath, object: &VersionJSON, independent_game_dir: bool) -> DMCLCExtraData {
-        let path = &*(version_root / "dmclc_extras.json");
-        if fs::metadata(path).is_ok() && let Ok(f) = fs::File::open(path) && let Ok(v) = serde_json::from_reader(f) {
+        version_root: &BetterPathBuf, object: &VersionJSON, independent_game_dir: bool) -> DMCLCExtraData {
+        let path = version_root.clone() / "dmclc_extras.json";
+        if fs::metadata(&path).is_ok() && let Ok(f) = fs::File::open(&path) && let Ok(v) = serde_json::from_reader(f) {
             return v;
         }
         #[allow(unused_mut)]
@@ -108,7 +108,7 @@ impl MinecraftInstallation {
             }
         }
         let version = object.get_base().client_version.clone()
-            .or_else(||Self::get_version_from_jar(*(version_root / format!("{}.jar", object.get_base().id))));
+            .or_else(||Self::get_version_from_jar(version_root.clone() / format!("{}.jar", object.get_base().id)));
         let ret = DMCLCExtraData {
             version,
             components,
@@ -118,13 +118,13 @@ impl MinecraftInstallation {
             extra_game_arguments: None,
             extra_jvm_arguments: None
         };
-        if let Ok(file) = fs::File::create(path) {
+        if let Ok(file) = fs::File::create(&path) {
             let _ = serde_json::to_writer(file, &ret);
         }
         ret
     }
 
-    fn get_version_from_jar(jar_file: BetterPath) -> Option<String> {
+    fn get_version_from_jar(jar_file: BetterPathBuf) -> Option<String> {
         let mut archive = zip::ZipArchive::new(fs::File::open(jar_file).ok()?).ok()?;
         let obj: Value = serde_json::from_reader(archive.by_name("version.json").ok()?).ok()?;
         obj["id"].as_str().map(str::to_string)

@@ -4,7 +4,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccountTrait, YggdrasilAuthInfo}, version::MinecraftInstallation}, utils::{BetterPath, download}};
+use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccountTrait, YggdrasilAuthInfo}, version::MinecraftInstallation}, utils::{BetterPathBuf, download}};
 
 use super::YggdrasilUserData;
 
@@ -26,10 +26,21 @@ impl YggdrasilAccountTrait for MinecraftUniversalLoginAccount {
         &self.data
     }
 
-    async fn prepare_launch(&self, version_launch_dir: &BetterPath, _: &LauncherContext) -> Result<()> {
-        let path = version_launch_dir / "nide8auth.jar";
-        if fs::metadata(&*path).await.is_err() {
-            download("https://login.mc-user.com:233/index/jar", path.as_ref()).await?;
+    fn with_cred(self, client_token: String, access_token: String) -> Self {
+        Self {
+            data: YggdrasilUserData {
+                client_token,
+                at: access_token,
+                ..self.data
+            },
+            ..self
+        }
+    }
+
+    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, _: &LauncherContext) -> Result<()> {
+        let path = version_launch_dir.clone() / "nide8auth.jar";
+        if fs::metadata(&path).await.is_err() {
+            download("https://login.mc-user.com:233/index/jar", &path).await?;
         }
         Ok(())
     }

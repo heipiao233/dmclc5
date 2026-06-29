@@ -13,7 +13,7 @@ use join_string::Join;
 use tokio::fs;
 use versions::Versioning;
 
-use crate::{components::{install::ComponentInstallerTrait, mods::{fabric::FabricModLoader, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, quilt::QuiltModLoader}}, minecraft::version::MinecraftInstallation, utils::BetterPath};
+use crate::{components::{install::ComponentInstallerTrait, mods::{fabric::FabricModLoader, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, quilt::QuiltModLoader}}, minecraft::version::MinecraftInstallation, utils::BetterPathBuf};
 
 /// A version requirement.
 /// If all the [versions::Requirement] matches, the [VersionBound] will match.
@@ -155,7 +155,7 @@ pub trait ModLoaderTrait {
     /// Get the builtin mods.
     fn get_builtin_mods(&self) -> Vec<ModInfo>;
     /// Get the mods in a file.
-    fn get_mods_in_file(&self, path: &BetterPath) -> Result<Vec<ModInfo>>;
+    fn get_mods_in_file(&self, path: &BetterPathBuf) -> Result<Vec<ModInfo>>;
 }
 
 /// Represents a mod loader like FML, Fabric Loader and Quilt Loader.
@@ -277,7 +277,7 @@ impl MinecraftInstallation {
             return Err(anyhow!(t!("loaders.minecraft_version_unknown")));
         }
         let mut mods: HashMap<String, HashMap<String, ModInfo>> = HashMap::new();
-        let moddir = &self.version_launch_work_dir / "mods";
+        let moddir = self.version_launch_work_dir.clone() / "mods";
         let mut dir = fs::read_dir(&moddir).await?;
         let mut loaders = vec![];
         for i in &self.extra_data.components {
@@ -288,7 +288,7 @@ impl MinecraftInstallation {
             if !file.file_type().await?.is_dir() {
                 let mut mods_in_file = HashMap::new();
                 for l in &loaders {
-                    let infos = l.get_mods_in_file(&(&*moddir / file.file_name()))?;
+                    let infos = l.get_mods_in_file(&(moddir.clone() / file.file_name()))?;
                     for info in infos {
                         mods_in_file.insert(info.id.clone(), info);
                     }

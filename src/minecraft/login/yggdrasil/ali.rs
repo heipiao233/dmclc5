@@ -6,7 +6,7 @@ use serde_json::Value;
 use sha2::Sha256;
 use base64::prelude::*;
 
-use crate::{LauncherContext, minecraft::{login::yggdrasil::{Profile, YggdrasilAccountTrait, YggdrasilAuthInfo}, version::MinecraftInstallation}, utils::{BetterPath, check_hash, download}};
+use crate::{LauncherContext, minecraft::{login::yggdrasil::{Profile, YggdrasilAccountTrait, YggdrasilAuthInfo}, version::MinecraftInstallation}, utils::{BetterPathBuf, check_hash, download}};
 
 use super::YggdrasilUserData;
 
@@ -28,15 +28,25 @@ impl YggdrasilAccountTrait for AuthlibInjectorAccount {
         &self.data
     }
 
-    async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()> {
-        let path = version_launch_dir / "authlib-injector-latest.jar";
+    fn with_cred(self, client_token: String, access_token: String) -> Self {
+        Self {
+            data: YggdrasilUserData {
+                client_token,
+                at: access_token,
+                ..self.data
+            }
+        }
+    }
+
+    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()> {
+        let path = version_launch_dir.clone() / "authlib-injector-latest.jar";
         let release_info: Value = launcher.http_client
             .get("https://bmclapi2.bangbang93.com/mirrors/authlib-injector/artifact/latest.json")
             .send().await?.json().await?;
-        if check_hash::<Sha256>(&path, release_info["checksums"]["sha256"].as_str().ok_or(anyhow!("No sha256 in checksums."))?, 0).await { // TODO: i18n
+        if check_hash::<Sha256>(path.as_ref(), release_info["checksums"]["sha256"].as_str().ok_or(anyhow!("No sha256 in checksums."))?, 0).await { // TODO: i18n
             return Ok(());
         }
-        download(release_info["download_url"].as_str().ok_or(anyhow!("Invaild download URL"))?, &path).await?; // TODO: i18n
+        download(release_info["download_url"].as_str().ok_or(anyhow!("Invaild download URL"))?, path).await?; // TODO: i18n
         Ok(())
     }
 

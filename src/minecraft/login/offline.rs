@@ -1,18 +1,18 @@
 //! The authentication method that allows offline launch.
 //! Please take care of anti priate.
 
-use std::{collections::HashMap, ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
 
-use crate::{LauncherContext, minecraft::{login::AccountTrait, version::MinecraftInstallation}, utils::BetterPath};
+use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}, version::MinecraftInstallation}, utils::BetterPathBuf};
 
 
 /// An offline account, useful if no Internet.
 #[derive(Serialize, Deserialize)]
-pub struct OfflineAccount(pub String);
+pub struct OfflineAccount(pub String, Uuid);
 
 impl Display for OfflineAccount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -20,17 +20,23 @@ impl Display for OfflineAccount {
     }
 }
 
-impl AccountTrait for OfflineAccount {
+impl OfflineAccount {
+    pub fn new(name: String) -> Self {
+        let uuid = Builder::from_md5_bytes(md5::compute(&name).0).into_uuid();
+        Self(name, uuid)
+    }
+}
 
-    async fn check(&mut self, _: &LauncherContext) -> bool {
-        true
+impl AccountTrait for OfflineAccount {
+    async fn check(self, _: &LauncherContext) -> Result<Account> {
+        Ok(self.into())
     }
 
     fn get_uuid(&self) -> Uuid {
-        Builder::from_md5_bytes(md5::compute(self.0.clone()).0).into_uuid()
+        self.1
     }
 
-    async fn prepare_launch(&self, _: &BetterPath, _: &LauncherContext) -> Result<()> {
+    async fn prepare_launch(&self, _: &BetterPathBuf, _: &LauncherContext) -> Result<()> {
         Ok(())
     }
 
@@ -38,14 +44,10 @@ impl AccountTrait for OfflineAccount {
         Ok(vec![])
     }
 
-    async fn get_launch_game_args(&mut self, _: &LauncherContext) -> HashMap<String, String> {
-        let mut map = HashMap::new();
-        map.insert("${auth_access_token}".to_string(), "IT_WORKS".to_string());
-        map.insert("${auth_session}".to_string(), "IT_WORKS".to_string());
-        map.insert("${auth_player_name}".to_string(), self.0.clone());
-        map.insert("${user_type}".to_string(), "offline".to_string());
-        map.insert("${user_properties}".to_string(), "{}".to_string());
-        return map;
+    fn replace_launch_game_arg(&self, arg: &String) -> String {
+        arg.replace("${auth_player_name}", &self.0)
+            .replace("${user_type}", "offline")
+            .replace("${user_properties}", "{}")
     }
 
     fn get_log_masks(&self) -> Vec<String> {

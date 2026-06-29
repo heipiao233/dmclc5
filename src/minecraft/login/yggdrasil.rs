@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::{login::AccountTrait, version::MinecraftInstallation}, utils::BetterPath};
+use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}, version::MinecraftInstallation}, utils::BetterPathBuf};
 pub use ali::AuthlibInjectorAccount;
 pub use mul::MinecraftUniversalLoginAccount;
 
@@ -47,6 +47,7 @@ struct AuthResponse {
 /// With some mod (mostly based on Java Agent) they inject and modify the auth server to third party ones.
 /// This doesn't provide proof of purchase nowadays.
 #[enum_dispatch]
+#[derive(Serialize, Deserialize)]
 pub enum YggdrasilAccount {
     /// The most widely used alternative Yggdrasil injection.
     /// See its source code in https://github.com/yushijinhun/authlib-injector
@@ -69,41 +70,38 @@ impl Display for YggdrasilAccount {
 trait YggdrasilAccountTrait: Display {
     /// Get the [YggdrasilUserData].
     fn get_data(&self) -> &YggdrasilUserData;
-    /// Get the API url.
-    async fn get_api_url(&mut self) -> Result<String> {
-        Ok(self.get_data().api_url.clone())
-    }
+    /// Set credentials.
+    fn with_cred(self, client_token: String, access_token: String) -> Self;
     /// Prepare for launch.
-    async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()>;
+    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()>;
     /// Get additional JVM arguments.
     async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>>;
 }
 
 impl AccountTrait for YggdrasilAccount {
-
-    async fn check(&mut self, launcher: &LauncherContext) -> bool {
-        let api_url = self.get_api_url().await;
-        if api_url.is_err() {
-            return false;
-        }
-        let api_url = api_url.unwrap();
-        let http = &(launcher.http_client);
+    async fn check(self, launcher: &LauncherContext) -> Result<Account> {
         let data = self.get_data();
         let req: Value = json!({
             "accessToken": data.at,
             "clientToken": data.client_token
         });
-        let res = http.post(format!("{api_url}/authserver/validate"))
+        let res = launcher.http_client.post(format!("{}/authserver/validate", data.api_url))
             .json(&req)
             .send().await;
-        res.is_ok() && res.unwrap().status() == StatusCode::NO_CONTENT
+        if let Ok(res) = res && res.status() == StatusCode::NO_CONTENT {
+            return Ok(self.into());
+        }
+        let res: AuthResponse = launcher.http_client.post(format!("{}/authserver/refresh", data.api_url))
+            .json(&req)
+            .send().await?.json().await?;
+        Ok(self.with_cred(res.client_token, res.access_token).into())
     }
 
     fn get_uuid(&self) -> Uuid {
         self.get_data().uuid
     }
 
-    async fn prepare_launch(&self, version_launch_dir: &BetterPath, launcher: &LauncherContext) -> Result<()> {
+    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()> {
         YggdrasilAccountTrait::prepare_launch(self, version_launch_dir, launcher).await
     }
 
@@ -111,16 +109,13 @@ impl AccountTrait for YggdrasilAccount {
         YggdrasilAccountTrait::get_launch_jvmargs(self, mc, launcher).await
     }
 
-    async fn get_launch_game_args(&mut self, _: &LauncherContext) -> HashMap<String, String> {
-        let mut map = HashMap::new();
+    fn replace_launch_game_arg(&self, arg: &String) -> String {
         let data = self.get_data();
-        let at = data.at.clone();
-        map.insert("${auth_access_token}".to_string(), at.clone());
-        map.insert("${auth_session}".to_string(), at);
-        map.insert("${auth_player_name}".to_string(), data.name.clone());
-        map.insert("${user_type}".to_string(), "mojang".to_string());
-        map.insert("${user_properties}".to_string(), "{}".to_string());
-        return map;
+        arg.replace("${auth_access_token}", &data.at)
+            .replace("${auth_session}", &data.at)
+            .replace("${auth_player_name}", &data.name)
+            .replace("${user_type}", "msa")
+            .replace("${user_properties}", "{}")
     }
 
     fn get_log_masks(&self) -> Vec<String> {

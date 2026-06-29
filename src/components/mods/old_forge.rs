@@ -47,7 +47,7 @@ impl ModLoaderTrait for OldForgeModLoader {
         ]
     }
 
-    fn get_mods_in_file(&self, path: &crate::utils::BetterPath) -> anyhow::Result<Vec<super::ModInfo>> {
+    fn get_mods_in_file(&self, path: &crate::utils::BetterPathBuf) -> anyhow::Result<Vec<super::ModInfo>> {
         let mut archive = ZipArchive::new(File::open(path)?)?;
         let info: Vec<McmodInfoItem> = serde_json::from_reader(archive.by_name("mcmod.info")?)?;
         let mut ret = vec![];

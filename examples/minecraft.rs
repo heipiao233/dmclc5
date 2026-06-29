@@ -1,29 +1,33 @@
 use std::{path::Path, process::Stdio, sync::Arc};
 
 use anyhow::Result;
-use dmclc5::{LauncherContext, minecraft::{login::{Account, offline::OfflineAccount}, schemas::VersionList}, utils::DownloadAllMessage};
+use dmclc5::{LauncherContext, minecraft::{login::{Account, AccountTrait, microsoft::MicrosoftAccount, offline::OfflineAccount}, schemas::VersionList}, utils::DownloadAllMessage};
+use serde::Serialize;
+use serde_json::json;
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
         Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
-            *count += 1;
-            println!("{} start: {len} ({count})", c.0.display());
+            println!("{} start: {len}", c.0.display());
         },
         Ok((c, async_fetcher::FetchEvent::Fetched)) => {
-            *count -= 1;
             println!("{} end ({count})", c.0.display());
+            *count -= 1;
         },
-        Ok((_, async_fetcher::FetchEvent::Fetching)) => (),
+        Ok((_, async_fetcher::FetchEvent::Fetching)) => {
+            *count += 1;
+            println!("{count}");
+        },
         Ok((c, async_fetcher::FetchEvent::Progress(prog))) => {
-            println!("{} fetching: {prog}", c.0.display());
+            // println!("{} fetching: {prog}", c.0.display());
         },
         Ok((c, async_fetcher::FetchEvent::Retrying))=> {
             println!("{} retrying", c.0.display());
         },
         Err((c, e)) => {
-            *count -= 1;
             println!("{} error {e} ({count})", c.0.display());
+            *count -= 1;
         }
     }
 }
@@ -31,7 +35,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
     let launcher = {
-        let mut launcher = LauncherContext::new(Path::new("./test")).await?;
+        let mut launcher = LauncherContext::new(Path::new("./test"), "Test".to_string(), "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()).await?;
         launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
         Arc::new(launcher)
     };
@@ -42,9 +46,17 @@ async fn real_main() -> Result<()> {
             handle_msg(next, &mut count).await;
         }
     };
-    let mc = vers.find_by_id("1.20.6").unwrap().install(launcher, "1.20.6", tx);
+    let mc = vers.find_by_id("26.2").unwrap().install(launcher.clone(), "26.2", tx);
     let mc = tokio::join!(message_handler, mc).1?;
-    let mut account: Account = OfflineAccount("testing".to_string()).into();
+    let msa = MicrosoftAccount::start_auth(&launcher).await?;
+    println!(
+        "Open this URL in your browser:\n{}\nand enter the code: {}",
+        msa.verification_uri().to_string(),
+        msa.user_code().secret().to_string()
+    );
+    let account: Account = MicrosoftAccount::login(&launcher, &msa).await?.into();
+    let account = account.check(&launcher).await?;
+    println!("{}", serde_json::to_string(&account)?);
     if let Some(c) = &mc.extra_data.before_command {
         let command: Vec<&str> = c.split(" ").collect();
         Command::new(command[0])
@@ -62,7 +74,7 @@ async fn real_main() -> Result<()> {
             handle_msg(next, &mut count).await;
         }
     };
-    let args = mc.launch_args(&mut account, tx);
+    let args = mc.launch_args(&account, tx);
     let args = tokio::join!(msg_handler, args).1?;
     Command::new(mc.extra_data.with_java.as_ref().map_or("java", String::as_str))
         .args(args)

@@ -46,11 +46,11 @@ impl FabricLikeInstallerTrait for FabricInstaller {
             builtin_mods: None
         };
         let filepath = format!("net/fabricmc/fabric-loader/{version}/fabric-loader-{version}.jar");
-        let path = &launcher.root_path / "libraries" / &filepath;
+        let path = launcher.root_path.clone() / "libraries" / &filepath;
         if !path.0.exists() {
             download(format!("https://maven.fabricmc.net/{filepath}"), &path).await?;
         }
-        let path = &launcher.root_path / "libraries/net/fabricmc/fabric-loader" / version / format!("fabric-loader-{version}.jar");
+        let path = launcher.root_path.clone() / "libraries/net/fabricmc/fabric-loader" / version / format!("fabric-loader-{version}.jar");
         loader.builtin_mods = Some(loader.get_mods_in_file(&path).ok().into_iter().flatten().collect());
         Ok(vec![loader.into()])
     }
@@ -69,7 +69,7 @@ impl FabricLikeInstallerTrait for QuiltInstaller {
             builtin_mods: None
         };
         let filepath = format!("org/quiltmc/quilt-loader/{version}/quilt-loader-{version}.jar");
-        let path = &launcher.root_path / "libraries" / &filepath;
+        let path = launcher.root_path.clone() / "libraries" / &filepath;
         if !path.0.exists() {
             download(format!("https://maven.quiltmc.org/repository/release/{filepath}"), &path).await?;
         }
@@ -112,9 +112,9 @@ impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstall
             form_urlencoded::byte_serialize(version.as_bytes()).collect::<String>())
         ).await?.json().await?;
         mc.obj = merge_version_json(&mc.obj, &version_info)?;
-        serde_json::to_writer(&std::fs::File::create(&mc.version_root / (mc.name.to_string() + ".json"))?, &mc.obj)?;
+        serde_json::to_writer(&std::fs::File::create(mc.version_root.clone() / (mc.name.to_string() + ".json"))?, &mc.obj)?;
         let res = mc.install_libraries(&version_info.get_base().libraries, true)?;
-        download_all(&res, download_channel,
+        download_all(res, download_channel,
             mc.launcher.download_threads_per_file, mc.launcher.download_parallel_files, mc.launcher.download_retries,
             mc.launcher.bmclapi_mirror.clone()
         ).await?;

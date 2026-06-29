@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, str::FromStr, sync::Arc};
 
-use dmclc5::{LauncherContext, components::install::fabriclike::FABRIC_INSTALLER, minecraft::schemas::VersionList, utils::{BetterPath, DownloadAllMessage, download}};
+use dmclc5::{LauncherContext, components::install::fabriclike::FABRIC_INSTALLER, minecraft::schemas::VersionList, utils::{BetterPathBuf, DownloadAllMessage, download}};
 use tokio::sync::mpsc;
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -48,7 +48,7 @@ async fn main() {
         }
     };
     tokio::join!(mc.install_component(FABRIC_INSTALLER, "0.16.0", tx), handler).0.unwrap();
-    let path = BetterPath(PathBuf::from_str("./test/versions/1.20.4-fabric/mods/entityculling-fabric-1.6.6-mc1.20.4.jar").unwrap());
+    let path = BetterPathBuf(PathBuf::from_str("./test/versions/1.20.4-fabric/mods/entityculling-fabric-1.6.6-mc1.20.4.jar").unwrap());
     download("https://cdn.modrinth.com/data/NNAgCjsB/versions/cj8nR3eG/entityculling-fabric-1.6.6-mc1.20.4.jar", &path).await.unwrap();
     println!("{:#?}", mc.list_mods().await.unwrap());
     println!("{:#?}", mc.check_mod_dependencies().await.unwrap());

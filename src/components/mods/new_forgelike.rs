@@ -8,7 +8,7 @@ use versions::Versioning;
 use zip::ZipArchive;
 use crate::utils::deserialize_maven_version_range;
 
-use crate::utils::BetterPath;
+use crate::utils::BetterPathBuf;
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
@@ -179,7 +179,7 @@ impl ModLoaderTrait for NewerForgeLikeModLoader {
         vec![self.builtin_mod.clone()]
     }
 
-    fn get_mods_in_file(&self, path: &BetterPath) -> Result<Vec<ModInfo>> {
+    fn get_mods_in_file(&self, path: &BetterPathBuf) -> Result<Vec<ModInfo>> {
         self.get_mods_in_reader(File::open(path)?)
     }
 }
