@@ -5,18 +5,16 @@ pub mod microsoft;
 pub mod yggdrasil;
 pub mod offline;
 
-use std::{collections::HashMap, ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display};
 
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::login::{offline::OfflineAccount, yggdrasil::YggdrasilAccount}, utils::BetterPathBuf};
+use crate::{LauncherContext, minecraft::login::{offline::OfflineAccount, yggdrasil::{AuthlibInjectorAccount, MinecraftUniversalLoginAccount, YggdrasilAccount}}, utils::BetterPathBuf};
 #[cfg(feature = "msa_auth")]
 use crate::minecraft::login::microsoft::MicrosoftAccount;
-
-use super::version::MinecraftInstallation;
 
 /// An account.
 #[enum_dispatch]
@@ -25,8 +23,10 @@ use super::version::MinecraftInstallation;
 pub enum Account {
     /// Offline account. Please take care of anti priate.
     OfflineAccount,
-    /// Yggdrasil account.
-    YggdrasilAccount,
+    /// An account with standard Yggdrasil, using [Authlib-Injector](https://github.com/yushijinhun/authlib-injector)
+    AuthlibInjectorAccount(YggdrasilAccount<AuthlibInjectorAccount>),
+    /// An account with nide8.
+    MinecraftUniversalLoginAccount(YggdrasilAccount<MinecraftUniversalLoginAccount>),
     #[cfg(feature = "msa_auth")]
     /// Microsoft account. This is the only one that proves the player has bought Minecraft.
     MicrosoftAccount
@@ -36,7 +36,8 @@ impl Display for Account {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::OfflineAccount(account) => account.fmt(f),
-            Self::YggdrasilAccount(account) => account.fmt(f),
+            Self::AuthlibInjectorAccount(account) => account.fmt(f),
+            Self::MinecraftUniversalLoginAccount(account) => account.fmt(f),
             #[cfg(feature = "msa_auth")]
             Self::MicrosoftAccount(account) => account.fmt(f)
         }
@@ -58,7 +59,7 @@ pub trait AccountTrait: Display + Sized {
     /// Prepare for launch.
     async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()>;
     /// Get additional JVM arguments.
-    async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>>;
+    async fn get_launch_jvmargs(&self, launcher: &LauncherContext) -> Result<Vec<OsString>>;
     /// Get additional game arguments.
     fn replace_launch_game_arg(&self, arg: &String) -> String;
     /// Get log masks for security datas like access token, refresh token.

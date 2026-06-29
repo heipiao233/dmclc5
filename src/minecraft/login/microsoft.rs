@@ -1,6 +1,6 @@
 //! The authentication method that Mojang uses now.
 
-use std::{collections::HashMap, ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display};
 
 use anyhow::{anyhow, Ok, Result};
 use oauth2::{RefreshToken, Scope, TokenResponse};

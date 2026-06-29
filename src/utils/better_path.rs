@@ -1,6 +1,5 @@
-use std::{ffi::{OsStr, OsString}, fmt::Debug, ops::Div, path::{Path, PathBuf}};
+use std::{fmt::Debug, ops::Div, path::{Path, PathBuf}};
 
-use osstrtools_fix::Bytes;
 
 /// A better PathBuf with "divide" support.
 ///

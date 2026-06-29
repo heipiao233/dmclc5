@@ -1,12 +1,11 @@
 //! Things about launching Minecraft.
 
-use std::{collections::HashMap, ffi::{OsStr, OsString}, fs::File, iter::once, path::PathBuf};
+use std::{ffi::{OsStr, OsString}, fs::File, iter::once, path::PathBuf};
 
 use anyhow::{Ok, Result};
 use either::Either;
 use osstrtools_fix::{Bytes, OsStringTools};
 use tokio::sync::mpsc;
-use uuid::Uuid;
 
 use crate::{minecraft::login::AccountTrait, utils::{DownloadAllMessage, PATH_DELIMITER, check_rules, check_rules_no_option, get_bits, get_os}};
 
@@ -45,7 +44,7 @@ impl MinecraftInstallation {
                     }
                 }
 
-                args.extend(account.get_launch_jvmargs(self, &self.launcher).await?);
+                args.extend(account.get_launch_jvmargs(&self.launcher).await?);
                 args.extend(self.extra_data.extra_jvm_arguments.clone().into_iter().flatten());
                 args.push(OsString::from(self.obj.get_base().main_class.clone()));
 
@@ -86,9 +85,9 @@ impl MinecraftInstallation {
     fn transform_arg(&self, arg: &Argument, cp: &OsStr, account: &Account) -> Vec<OsString> {
         let auth_uuid = account.get_uuid().simple().to_string();
         let game_dir = self.version_launch_work_dir.0.as_os_str();
-        let assets_root = (self.launcher.root_path.clone() / "assets");
-        let natives_dir = (self.version_root.clone() / "natives");
-        let libraries_dir = (self.launcher.root_path.clone() / "libraries");
+        let assets_root = self.launcher.root_path.clone() / "assets";
+        let natives_dir = self.version_root.clone() / "natives";
+        let libraries_dir = self.launcher.root_path.clone() / "libraries";
         let args = std::iter::once(arg)
             .filter_map(|arg| match arg {
                 Argument::String(s) => Some(Either::Left(once(s))),

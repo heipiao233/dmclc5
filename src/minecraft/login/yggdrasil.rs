@@ -3,7 +3,7 @@
 pub(crate) mod mul;
 pub(crate) mod ali;
 
-use std::{collections::HashMap, ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display};
 
 use anyhow::{Result, anyhow};
 use enum_dispatch::enum_dispatch;
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}, version::MinecraftInstallation}, utils::BetterPathBuf};
+use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}}, utils::BetterPathBuf};
 pub use ali::AuthlibInjectorAccount;
 pub use mul::MinecraftUniversalLoginAccount;
 
@@ -46,41 +46,29 @@ struct AuthResponse {
 /// A kind of [Account] that Mojang uses before the migration. Used by some servers.
 /// With some mod (mostly based on Java Agent) they inject and modify the auth server to third party ones.
 /// This doesn't provide proof of purchase nowadays.
-#[enum_dispatch]
 #[derive(Serialize, Deserialize)]
-pub enum YggdrasilAccount {
-    /// The most widely used alternative Yggdrasil injection.
-    /// See its source code in https://github.com/yushijinhun/authlib-injector
-    AuthlibInjectorAccount,
-    /// So-called ["Minecraft 统一通行证"](https://login.mc-user.com:233/) or "nide8". Provide per-server authenication.
-    /// This injects a third party proprietary software provided by them to Minecraft.
-    MinecraftUniversalLoginAccount
-}
+pub struct YggdrasilAccount<A: YggdrasilAccountTrait>(YggdrasilUserData, A);
 
-impl Display for YggdrasilAccount {
+impl <A: YggdrasilAccountTrait> Display for YggdrasilAccount<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::AuthlibInjectorAccount(account) => account.fmt(f),
-            Self::MinecraftUniversalLoginAccount(account) => account.fmt(f)
-        }
+        write!(f, "{} ({})", self.0.name, self.0.server_name)
     }
 }
 
+/// The interface of [YggdrasilAccount]
 #[enum_dispatch(YggdrasilAccount)]
-trait YggdrasilAccountTrait: Display {
-    /// Get the [YggdrasilUserData].
-    fn get_data(&self) -> &YggdrasilUserData;
-    /// Set credentials.
-    fn with_cred(self, client_token: String, access_token: String) -> Self;
+#[allow(async_fn_in_trait)]
+pub trait YggdrasilAccountTrait {
     /// Prepare for launch.
     async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()>;
     /// Get additional JVM arguments.
-    async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>>;
+    async fn get_launch_jvmargs(&self, data: &YggdrasilUserData, launcher: &LauncherContext) -> Result<Vec<OsString>>;
 }
 
-impl AccountTrait for YggdrasilAccount {
+impl <A: YggdrasilAccountTrait> AccountTrait for YggdrasilAccount<A>
+where Account: From<Self> {
     async fn check(self, launcher: &LauncherContext) -> Result<Account> {
-        let data = self.get_data();
+        let data = &self.0;
         let req: Value = json!({
             "accessToken": data.at,
             "clientToken": data.client_token
@@ -94,23 +82,27 @@ impl AccountTrait for YggdrasilAccount {
         let res: AuthResponse = launcher.http_client.post(format!("{}/authserver/refresh", data.api_url))
             .json(&req)
             .send().await?.json().await?;
-        Ok(self.with_cred(res.client_token, res.access_token).into())
+        Ok(Self(YggdrasilUserData {
+            at: res.access_token,
+            client_token: res.client_token,
+            ..self.0
+        }, self.1).into())
     }
 
     fn get_uuid(&self) -> Uuid {
-        self.get_data().uuid
+        self.0.uuid
     }
 
     async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()> {
-        YggdrasilAccountTrait::prepare_launch(self, version_launch_dir, launcher).await
+        self.1.prepare_launch(version_launch_dir, launcher).await
     }
 
-    async fn get_launch_jvmargs(&self, mc: &MinecraftInstallation, launcher: &LauncherContext) -> Result<Vec<OsString>> {
-        YggdrasilAccountTrait::get_launch_jvmargs(self, mc, launcher).await
+    async fn get_launch_jvmargs(&self, launcher: &LauncherContext) -> Result<Vec<OsString>> {
+        self.1.get_launch_jvmargs(&self.0, launcher).await
     }
 
     fn replace_launch_game_arg(&self, arg: &String) -> String {
-        let data = self.get_data();
+        let data = &self.0;
         arg.replace("${auth_access_token}", &data.at)
             .replace("${auth_session}", &data.at)
             .replace("${auth_player_name}", &data.name)
@@ -119,7 +111,7 @@ impl AccountTrait for YggdrasilAccount {
     }
 
     fn get_log_masks(&self) -> Vec<String> {
-        vec![self.get_data().at.clone(), self.get_data().client_token.clone()]
+        vec![self.0.at.clone(), self.0.client_token.clone()]
     }
 }
 

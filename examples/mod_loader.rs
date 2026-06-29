@@ -6,30 +6,32 @@ use tokio::sync::mpsc;
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
         Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
-            *count += 1;
-            println!("{} start: {len} ({count})", c.0.display());
+            println!("{} start: {len}", c.0.display());
         },
         Ok((c, async_fetcher::FetchEvent::Fetched)) => {
-            *count -= 1;
             println!("{} end ({count})", c.0.display());
+            *count -= 1;
         },
-        Ok((_, async_fetcher::FetchEvent::Fetching)) => (),
-        Ok((c, async_fetcher::FetchEvent::Progress(prog))) => {
-            println!("{} fetching: {prog}", c.0.display());
+        Ok((_, async_fetcher::FetchEvent::Fetching)) => {
+            *count += 1;
+            println!("{count}");
+        },
+        Ok((_c, async_fetcher::FetchEvent::Progress(_prog))) => {
+            // println!("{} fetching: {prog}", c.0.display());
         },
         Ok((c, async_fetcher::FetchEvent::Retrying))=> {
             println!("{} retrying", c.0.display());
         },
         Err((c, e)) => {
-            *count -= 1;
             println!("{} error {e} ({count})", c.0.display());
+            *count -= 1;
         }
     }
 }
 
 #[tokio::main]
 async fn main() {
-    let launcher = Arc::new(LauncherContext::new(Path::new("./test")).await.unwrap());
+    let launcher = Arc::new(LauncherContext::new(Path::new("./test"), "dmclc example mod_loader".to_string()).await.unwrap());
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
         let mut count = 0;

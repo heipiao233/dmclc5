@@ -1,9 +1,7 @@
 use std::{path::Path, process::Stdio, sync::Arc};
 
 use anyhow::Result;
-use dmclc5::{LauncherContext, minecraft::{login::{Account, AccountTrait, microsoft::MicrosoftAccount, offline::OfflineAccount}, schemas::VersionList}, utils::DownloadAllMessage};
-use serde::Serialize;
-use serde_json::json;
+use dmclc5::{LauncherContext, minecraft::{login::{Account, AccountTrait, microsoft::MicrosoftAccount}, schemas::VersionList}, utils::DownloadAllMessage};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -19,7 +17,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
             *count += 1;
             println!("{count}");
         },
-        Ok((c, async_fetcher::FetchEvent::Progress(prog))) => {
+        Ok((_c, async_fetcher::FetchEvent::Progress(_prog))) => {
             // println!("{} fetching: {prog}", c.0.display());
         },
         Ok((c, async_fetcher::FetchEvent::Retrying))=> {

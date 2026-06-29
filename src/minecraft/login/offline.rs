@@ -7,7 +7,7 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
 
-use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}, version::MinecraftInstallation}, utils::BetterPathBuf};
+use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}}, utils::BetterPathBuf};
 
 
 /// An offline account, useful if no Internet.
@@ -21,6 +21,7 @@ impl Display for OfflineAccount {
 }
 
 impl OfflineAccount {
+    /// Create a [OfflineAccount] from username
     pub fn new(name: String) -> Self {
         let uuid = Builder::from_md5_bytes(md5::compute(&name).0).into_uuid();
         Self(name, uuid)
@@ -40,7 +41,7 @@ impl AccountTrait for OfflineAccount {
         Ok(())
     }
 
-    async fn get_launch_jvmargs(&self, _mc: &MinecraftInstallation, _: &LauncherContext) -> Result<Vec<OsString>> {
+    async fn get_launch_jvmargs(&self, _: &LauncherContext) -> Result<Vec<OsString>> {
         Ok(vec![])
     }
 

@@ -1,13 +1,12 @@
 //! Implementation of [ComponentInstaller] for Forge-like installers.
 
-use std::{collections::HashMap, ffi::OsString, io::Read, path::{Path, PathBuf}, process::Stdio};
+use std::{collections::HashMap, ffi::OsString, io::Read, path::PathBuf, process::Stdio};
 
 use anyhow::{anyhow, Result};
 use fs_extra::dir::CopyOptions;
 use osstrtools_fix::Bytes;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
-use tempfile::TempDir;
 use tokio::{fs, process::Command, sync::mpsc};
 
 #[cfg(feature = "mod_loaders")]
