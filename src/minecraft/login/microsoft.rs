@@ -164,7 +164,7 @@ impl AccountTrait for MicrosoftAccount {
         Ok(vec![])
     }
 
-    fn replace_launch_game_arg(&self, arg: &String) -> String {
+    fn replace_launch_game_arg(&self, arg: &str) -> String {
         arg.replace("${auth_access_token}", &self.at)
             .replace("${auth_session}", &self.at)
             .replace("${auth_player_name}", &self.name)
