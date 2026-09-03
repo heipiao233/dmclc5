@@ -4,8 +4,6 @@
 pub mod modrinth;
 pub mod curseforge;
 
-use std::collections::HashMap;
-
 use anyhow::Result;
 
 use crate::{LauncherContext, future, minecraft::version::MinecraftInstallation, utils::BetterPathBuf};
@@ -46,11 +44,11 @@ pub trait Content {
     fn get_icon_url(&self) -> Option<String>;
     /// Get url for issue, Discord, source....
     /// The key is the name, the value is the url.
-    fn get_urls(&self) -> HashMap<String, String>;
+    fn get_urls(&self) -> Vec<(String, String)>;
     /// Get the screenshots.
     fn get_screenshots(&self) -> Vec<Screenshot>;
     /// Get other informations like authors, downloads...
-    fn get_other_information(&self) -> HashMap<String, String>;
+    fn get_other_information(&self) -> Vec<(&'static str, String)>;
     /// Check if this is a library mod.
     fn is_library(&self) -> bool;
     /// Returns the [ContentType].

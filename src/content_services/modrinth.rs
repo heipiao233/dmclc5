@@ -1,6 +1,6 @@
 //! [Modrinth](https://modrinth.com/), operated by [Spark Universe](https://sparkuniverse.com/) based in Germany.
 
-use std::{collections::HashMap, fmt::Debug, sync::LazyLock};
+use std::{fmt::Debug, sync::LazyLock};
 
 use anyhow::{anyhow, Error, Result};
 use futures_util::io::AllowStdIo;
@@ -273,24 +273,18 @@ impl Content for ModrinthProject {
     fn get_icon_url(&self) -> Option<String> {
         self.icon_url.clone()
     }
-    fn get_urls(&self) -> HashMap<String, String> {
-        let mut ret = HashMap::new();
-        if let Some(v) = &self.wiki_url {
-            ret.insert("wiki".to_string(), v.clone());
-        }
-        if let Some(v) = &self.issues_url {
-            ret.insert("issues".to_string(), v.clone());
-        }
-        if let Some(v) = &self.source_url {
-            ret.insert("source".to_string(), v.clone());
-        }
-        if let Some(v) = &self.discord_url {
-            ret.insert("discord".to_string(), v.clone());
-        }
-        for v in self.donation_urls.iter().flatten() {
-            ret.insert(format!("donation.{}", v.platform), v.url.clone());
-        }
-        ret
+    fn get_urls(&self) -> Vec<(String, String)> {
+        let wiki = self.wiki_url.as_ref().map(|wiki|("wiki".to_string(), wiki.clone()));
+        let issues = self.issues_url.as_ref().map(|issues|("issues".to_string(), issues.clone()));
+        let source = self.source_url.as_ref().map(|source|("source".to_string(), source.clone()));
+        let discord = self.discord_url.as_ref().map(|discord|("discord".to_string(), discord.clone()));
+        let donations = self.donation_urls.as_ref().into_iter().flat_map(|urls| urls.iter())
+            .map(|url| (format!("donation.{}", url.platform), url.url.clone()));
+        wiki.into_iter().chain(issues.into_iter())
+            .chain(source.into_iter())
+            .chain(discord.into_iter())
+            .chain(donations)
+            .collect()
     }
     fn get_screenshots(&self) -> Vec<Screenshot> {
         self.gallery.iter().map(|v|{
@@ -301,14 +295,14 @@ impl Content for ModrinthProject {
             }
         }).collect()
     }
-    fn get_other_information(&self) -> HashMap<String, String> {
-        let mut ret = HashMap::new();
-        ret.insert("downloads".to_string(), self.downloads.to_string());
-        ret.insert("followers".to_string(), self.followers.to_string());
-        ret.insert("license".to_string(), self.license.name.clone());
-        ret.insert("published".to_string(), self.published.clone());
-        ret.insert("updated".to_string(), self.updated.clone());
-        ret
+    fn get_other_information(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("downloads", self.downloads.to_string()),
+            ("followers", self.followers.to_string()),
+            ("license", self.license.name.clone()),
+            ("published", self.published.clone()),
+            ("updated", self.updated.clone())
+        ]
     }
     fn is_library(&self) -> bool {
         return self.categories.contains(&"library".to_string());

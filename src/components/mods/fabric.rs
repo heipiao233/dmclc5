@@ -159,28 +159,27 @@ impl FabricModLoader {
                 conflicts: mod_json.conflicts.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
                 breaks: mod_json.breaks.into_iter().flat_map(HashMap::into_iter).map(Into::into).collect(),
             });
-            for i in mod_json.provides.iter().flatten() {
-                res.push(ModInfo {
-                    name: None,
-                    id: i.clone(),
-                    version: None,
-                    desc: None,
-                    license: res[0].license.clone(),
-                    depends: vec![],
-                    recommends: vec![],
-                    suggests: vec![],
-                    conflicts: vec![],
-                    breaks: vec![]
-                });
-            }
+            let license = res[0].license.clone();
+            res.extend(mod_json.provides.iter().flatten().map(|i| ModInfo {
+                name: None,
+                id: i.clone(),
+                version: None,
+                desc: None,
+                license: license.clone(),
+                depends: vec![],
+                recommends: vec![],
+                suggests: vec![],
+                conflicts: vec![],
+                breaks: vec![]
+            }));
 
-            for jar_info in mod_json.jars.into_iter().flatten() {
-                if let Ok(mut jar_entry) = archive.by_name(&jar_info.file) {
+            mod_json.jars.into_iter().flatten()
+                .map(|jar_info| {
                     let mut jar_data = Vec::new();
-                    jar_entry.read_to_end(&mut jar_data)?;
-                    stack.push(Cursor::new(jar_data));
-                }
-            }
+                    archive.by_name(&jar_info.file)?.read_to_end(&mut jar_data)?;
+                    Ok::<_, anyhow::Error>(Cursor::new(jar_data))
+                })
+                .try_for_each(|jar| Ok::<_, anyhow::Error>(stack.push(jar?)))?;
         }
 
         Ok(res)

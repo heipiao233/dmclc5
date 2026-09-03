@@ -26,6 +26,11 @@ impl OfflineAccount {
         let uuid = Builder::from_md5_bytes(md5::compute(&name).0).into_uuid();
         Self(name, uuid)
     }
+
+    /// Create a [OfflineAccount] from username and uuid
+    pub fn new_with_uuid(name: String, uuid: Uuid) -> Self {
+        Self(name, uuid)
+    }
 }
 
 impl AccountTrait for OfflineAccount {

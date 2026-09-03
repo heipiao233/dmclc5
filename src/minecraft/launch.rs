@@ -1,6 +1,6 @@
 //! Things about launching Minecraft.
 
-use std::{ffi::{OsStr, OsString}, fs::File, iter::once, path::PathBuf};
+use std::{ffi::{OsStr, OsString}, fs::File, iter::{self, once}, path::PathBuf};
 
 use anyhow::{Ok, Result};
 use either::Either;
@@ -119,20 +119,11 @@ impl MinecraftInstallation {
     }
 
     fn gen_classpath(&self) -> Vec<OsString> {
-        let mut ret: Vec<OsString> = vec![];
-        for lib in &self.obj.get_base().libraries {
-            if !check_rules(&lib.get_base().rules) {
-                continue;
-            }
-            if let Library::VanillaNatives(_) = lib {
-                continue;
-            }
-            let path = (self.launcher.root_path.clone() / "libraries" / &lib.get_base().name.to_path()).0.into_os_string();
-            if !ret.contains(&path) {
-                ret.push(path);
-            }
-        }
-        ret.push((self.version_root.clone() / format!("{}.jar", self.name)).0.into_os_string());
-        ret
+        self.obj.get_base().libraries.iter()
+            .filter(|lib| check_rules(&lib.get_base().rules))
+            .filter(|lib| matches!(lib, Library::VanillaNatives(_)))
+            .map(|lib| (self.launcher.root_path.clone() / "libraries" / &lib.get_base().name.to_path()).0.into_os_string())
+            .chain(iter::once((self.version_root.clone() / format!("{}.jar", self.name)).0.into_os_string()))
+            .collect()
     }
 }

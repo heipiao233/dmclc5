@@ -71,25 +71,14 @@ pub fn check_rule(rule: &EnvRule) -> bool {
 
 /// Check [EnvRule]s.
 pub fn check_rules_no_option(rules: &Vec<EnvRule>) -> bool {
-    for i in rules {
-        if !check_rule(i) {
-            return false;
-        }
-    }
-    true
+    rules.iter()
+        .any(check_rule)
 }
 
 /// Optionally check [EnvRule]s.
 pub fn check_rules(rules: &Option<Vec<EnvRule>>) -> bool {
-    if rules.is_none() {
-        return true;
-    }
-    for i in rules.as_ref().unwrap() {
-        if check_rule(i) {
-            return true;
-        }
-    }
-    false
+    rules.iter().flatten()
+        .any(check_rule)
 }
 
 /// Concat two OsStr.
@@ -220,35 +209,38 @@ pub fn deserialize_maven_version_range<'de, D: Deserializer<'de>>(deserializer: 
     deserializer.deserialize_str(StructVisitor)
 }
 
+#[derive(Clone, Copy)]
+enum StrBegin {
+    Single,
+    Double,
+    None
+}
+
 /// Converts silly newlines to "\\n" in JSONs.
 pub fn json_newline_transform(source: &str) -> String {
     let mut result = vec![];
-    let mut is_str = 0;
+    let mut begin = StrBegin::None;
     for  i in source.chars() {
-        match i {
-            '"' => {
-                if is_str == 1 {
-                    is_str = 0;
-                }
-                else if is_str == 0 {
-                    is_str = 1;
-                }
+        match (i, begin) {
+            ('"', StrBegin::Double) => {
+                begin = StrBegin::None;
                 result.push(i);
             },
-            '\'' => {
-                if is_str == 2 {
-                    is_str = 0;
-                }
-                else if is_str == 0 {
-                    is_str = 2;
-                }
+            ('"', StrBegin::None) => {
+                begin = StrBegin::Double;
+                result.push(i);
+            },
+            ('\'', StrBegin::Single) => {
+                begin = StrBegin::None;
                 result.push(i);
             }
-            '\n' => {
-                if is_str != 0 {
-                    result.push('\\');
-                    result.push('n');
-                }
+            ('\'', StrBegin::None) => {
+                begin = StrBegin::Single;
+                result.push(i);
+            }
+            ('\n', StrBegin::Double | StrBegin::Single) => {
+                result.push('\\');
+                result.push('n');
             }
             _ => {
                 result.push(i)

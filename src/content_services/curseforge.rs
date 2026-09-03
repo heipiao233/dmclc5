@@ -1,8 +1,9 @@
 //! [CurseForge](https://www.curseforge.com/), operated by [OverWolf](https://www.overwolf.com/) based in Israel.
 
-use std::{collections::HashMap, fmt::Debug};
+use std::fmt::Debug;
 
 use anyhow::Result;
+use futures::{StreamExt, TryStreamExt, stream};
 use murmur2::murmur2;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -260,14 +261,13 @@ impl Content for CurseforgeMod {
     fn get_icon_url(&self) -> Option<String> {
         Some(self.logo.url.clone())
     }
-    fn get_urls(&self) -> HashMap<String, String> {
-        let ret = [
+    fn get_urls(&self) -> Vec<(String, String)> {
+        [
             ("issues".to_string(), self.links.issues_url.clone()),
             ("source".to_string(), self.links.source_url.clone()),
             ("website".to_string(), self.links.website_url.clone()),
             ("wiki".to_string(), self.links.wiki_url.clone())
-        ].into_iter().filter(|v|v.1.is_some()).map(|(k, v)|(k, v.unwrap())).collect();
-        ret
+        ].into_iter().filter(|v|v.1.is_some()).map(|(k, v)|(k, v.unwrap())).collect()
     }
     fn get_screenshots(&self) -> Vec<Screenshot> {
         self.screenshots.iter().map(|v|{
@@ -278,14 +278,14 @@ impl Content for CurseforgeMod {
             }
         }).collect()
     }
-    fn get_other_information(&self) -> HashMap<String, String> {
-        let mut ret = HashMap::new();
-        ret.insert("downloads".to_string(), self.download_count.to_string());
-        ret.insert("authors".to_string(), self.authors.iter().map(|v|v.name.clone()).collect::<Vec<_>>().join(","));
-        ret.insert("published".to_string(), self.date_created.clone());
-        ret.insert("modified".to_string(), self.date_modified.clone());
-        ret.insert("updated".to_string(), self.date_released.clone());
-        ret
+    fn get_other_information(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("downloads", self.download_count.to_string()),
+            ("authors", self.authors.iter().map(|v|v.name.clone()).collect::<Vec<_>>().join(",")),
+            ("published", self.date_created.clone()),
+            ("modified", self.date_modified.clone()),
+            ("updated", self.date_released.clone())
+        ]
     }
     fn is_library(&self) -> bool {
         return self.categories.iter().any(|v|v.slug == "library-api");
@@ -321,17 +321,14 @@ impl ContentVersion for CurseforgeModFile {
         self.display_name.clone()
     }
     async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<CurseforgeMod>>> {
-        let mut deps: Vec<ContentDependency<_>> = Vec::new();
-        for i in &self.dependencies {
-            if RelationType::RequiredDependency != i.relation_type {
-                continue;
-            }
-            let a = ContentDependency::Content(
-                CurseforgeMod::from_id(&i.mod_id.to_string(), &launcher).await?
-            );
-            deps.push(a);
-        }
-        Ok(vec![])
+        stream::iter(&self.dependencies)
+            .filter(|i| async { RelationType::RequiredDependency == i.relation_type })
+            .then(|i| async {
+                Ok::<_, anyhow::Error>(ContentDependency::Content(
+                    CurseforgeMod::from_id(&i.mod_id.to_string(), &launcher).await?
+                ))
+            })
+            .try_collect().await
     }
 }
 

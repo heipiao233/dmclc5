@@ -54,11 +54,10 @@ async fn real_main() -> Result<()> {
     );
     let account: Account = MicrosoftAccount::login(&launcher, &msa).await?.into();
     let account = account.check(&launcher).await?;
-    println!("{}", serde_json::to_string(&account)?);
     if let Some(c) = &mc.extra_data.before_command {
-        let command: Vec<&str> = c.split(" ").collect();
-        Command::new(command[0])
-            .args(&command[1..])
+        let command = c.split(" ");
+        Command::new(command.next())
+            .args(command)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
             .stdin(Stdio::null())

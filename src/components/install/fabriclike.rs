@@ -113,7 +113,7 @@ impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstall
         ).await?.json().await?;
         mc.obj = merge_version_json(&mc.obj, &version_info)?;
         serde_json::to_writer(&std::fs::File::create(mc.version_root.clone() / (mc.name.to_string() + ".json"))?, &mc.obj)?;
-        let res = mc.install_libraries(&version_info.get_base().libraries, true)?;
+        let res = mc.libraries(&version_info.get_base().libraries, true);
         download_all(res, download_channel,
             mc.launcher.download_threads_per_file, mc.launcher.download_parallel_files, mc.launcher.download_retries,
             mc.launcher.bmclapi_mirror.clone()
@@ -122,11 +122,9 @@ impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstall
     }
 
     fn find_in_version(&self, v: &VersionJSON) -> Option<String> {
-        for i in &v.get_base().libraries {
-            if i.get_base().name.name == T::LOADER_ARTIFACT_NAME {
-                return Some(i.get_base().name.version.clone());
-            }
-        }
-        None
+        v.get_base()
+            .libraries.iter()
+            .find(|i|i.get_base().name.name == T::LOADER_ARTIFACT_NAME)
+            .map(|i|i.get_base().name.version.clone())
     }
 }

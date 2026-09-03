@@ -132,11 +132,7 @@ impl Display for ModIssue {
 
 impl Debug for ModIssue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_char('(')?;
-        self.level.fmt(f)?;
-        f.write_char(')')?;
-        f.write_str(&self.message)?;
-        Ok(())
+        f.write_fmt(format_args!("({:?}){}", self.level, self.message))
     }
 }
 

@@ -219,7 +219,7 @@ pub enum OSType {
     // Other OSes are not supported by Mojang.
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RulePlatform {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<OSType>,
@@ -229,14 +229,14 @@ pub struct RulePlatform {
     pub arch: Option<String>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum EnvRuleType {
     Allow,
     Disallow
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EnvRule {
     pub action: EnvRuleType,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -245,14 +245,14 @@ pub struct EnvRule {
     pub os: Option<RulePlatform>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum OneOrMoreArguments {
     One(String),
     More(Vec<String>)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged)]
 pub enum Argument {
     String(String),

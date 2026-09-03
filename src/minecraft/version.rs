@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[cfg(feature="mod_loaders")]
-use crate::components::COMPONENTS;
+use crate::components::{COMPONENTS, install::ComponentInstallerTrait};
 #[cfg(feature="components_installation")]
 use crate::components::install::ComponentInstaller;
 use crate::{LauncherContext, utils::BetterPathBuf};
@@ -97,16 +97,13 @@ impl MinecraftInstallation {
         if fs::metadata(&path).is_ok() && let Ok(f) = fs::File::open(&path) && let Ok(v) = serde_json::from_reader(f) {
             return v;
         }
-        #[allow(unused_mut)]
-        let mut components: Vec<ComponentInfo> = Vec::new();
+        #[cfg(not(feature="mod_loaders"))]
+        let components: Vec<ComponentInfo> = Vec::new();
         #[cfg(feature="mod_loaders")]
-        for component in &COMPONENTS {
-            use crate::components::install::ComponentInstallerTrait;
-
-            if let Some(version) = component.find_in_version(object) {
-                components.push(ComponentInfo { name: component.clone(), version });
-            }
-        }
+        let components: Vec<ComponentInfo> = COMPONENTS.iter()
+            .filter_map(|c| Some((c, c.find_in_version(object)?)))
+            .map(|(c, version)| ComponentInfo { name: c.clone(), version })
+            .collect();
         let version = object.get_base().client_version.clone()
             .or_else(||Self::get_version_from_jar(version_root.clone() / format!("{}.jar", object.get_base().id)));
         let ret = DMCLCExtraData {

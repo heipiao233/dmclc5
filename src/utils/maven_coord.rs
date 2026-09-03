@@ -65,7 +65,7 @@ impl Display for ArtifactCoordinate {
 }
 
 impl ArtifactCoordinate {
-    /// Convert a [ArtifactCoordinate] to path.
+    /// Convert an [ArtifactCoordinate] to path.
     pub fn to_path(&self) -> String {
         let mut ret = format!("{}/{}/{}/{}-{}", self.group.replace(".", "/"), self.name, self.version, self.name, self.version);
         if let Some(cls) = &self.classifier {
@@ -79,7 +79,7 @@ impl ArtifactCoordinate {
 impl From<&str> for ArtifactCoordinate {
     fn from(value: &str) -> Self {
         let splited = value.split("@").collect::<Vec<&str>>();
-        let ext = if splited.len() == 2{
+        let ext = if splited.len() == 2 {
             splited[1]
         } else {
             "jar"

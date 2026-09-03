@@ -62,7 +62,7 @@ impl ToString for ComponentInstaller {
 
 impl FromStr for ComponentInstaller {
     type Err = String;
-    fn from_str(s: &str) -> std::prelude::v1::Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
             "fabric" => Ok(FABRIC_INSTALLER),
             "quilt" => Ok(QUILT_INSTALLER),

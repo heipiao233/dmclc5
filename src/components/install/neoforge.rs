@@ -47,14 +47,16 @@ impl ForgeLikeInstallerTrait for NeoForgeInstaller {
     }
 
     fn find_in_version(mc: &VersionJSON) -> Option<String> {
-        if let VersionJSON::New { arguments, base: _ } = mc {
-            for arg2 in arguments.game.as_ref()?.windows(2) {
-                if let Argument::String(v) = &arg2[0] && v == "--fml.neoForgeVersion" && let Argument::String(w) = &arg2[1] {
-                    return Some(w.to_string());
-                }
-            }
-        }
-        None
+        let VersionJSON::New { arguments, base: _ } = mc else {
+            return None;
+        };
+        arguments.game.as_ref()
+            .iter()
+            .flat_map(|i|i.windows(2))
+            .filter_map(|i| if Argument::String("--fml.neoForgeVersion".to_string()) == i[0] && let Argument::String(w) = &i[1] {
+                Some(w.clone())
+            } else { None })
+            .next()
     }
 
     fn get_archive_base_name(mc_version: &str) -> String {

@@ -4,6 +4,7 @@ use std::{collections::HashMap, ffi::OsString, io::Read, path::PathBuf, process:
 
 use anyhow::{anyhow, Result};
 use fs_extra::dir::CopyOptions;
+use futures::{StreamExt, TryStreamExt, stream};
 use osstrtools_fix::Bytes;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
@@ -132,59 +133,58 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                 if let Ok(f) = fs::metadata(&maven_dir).await && f.is_dir() {
                     fs_extra::dir::copy(&maven_dir, mc.launcher.root_path.clone() / "libraries", &CopyOptions::new().content_only(true))?;
                 }
-                let mut res = mc.install_libraries(&metadata.libraries, false)?;
+                let mut res = mc.libraries(&metadata.libraries, false);
                 let target = &mc.obj;
                 let source: VersionJSON = serde_json::from_reader(std::fs::File::open(installer_dir.clone() / "version.json")?)?;
                 result = merge_version_json(target, &source)?;
-                res.extend(mc.install_libraries(&source.get_base().libraries, false)?);
+                res.extend(mc.libraries(&source.get_base().libraries, false));
                 download_all(
                     res, download_channel, mc.launcher.download_threads_per_file,
                     mc.launcher.download_parallel_files, mc.launcher.download_retries,
                     mc.launcher.bmclapi_mirror.clone()
                 ).await?;
 
-                for processor in &metadata.processors {
-                    if processor.args.contains(&"DOWNLOAD_MOJMAPS".to_string()) {
-                        continue;
-                    }
-
-                    if processor.sides.contains(&Side::Client) || processor.sides.is_empty() {
-                        let mut res = false;
-                        if !processor.outputs.is_empty() {
-                            let outputs = &processor.outputs;
-                            res = true;
-                            for (k, v) in outputs {
-                                res = res && check_hash::<Sha1>(
-                                    &PathBuf::from(transform_arguments(&k, &installer_dir, &mc, &metadata)),
-                                    &transform_arguments(&v, &installer_dir, &mc, &metadata).into_string().unwrap(),
-                                    0
-                                ).await;
+                stream::iter(&metadata.processors)
+                    .filter(|p| futures::future::ready(!p.args.contains(&"DOWNLOAD_MOJMAPS".to_string())))
+                    .filter(|p| futures::future::ready(p.sides.contains(&Side::Client) || p.sides.is_empty()))
+                    .filter(|p| async {
+                        !stream::iter(&p.outputs)
+                            .map(|(name, hash)| (transform_arguments(name, &installer_dir, &mc, &metadata), transform_arguments(hash, &installer_dir, &mc, &metadata)))
+                            .all(async |(name, hash)| check_hash::<Sha1>(
+                                &PathBuf::from(name),
+                                &hash.into_string().unwrap(),
+                                0
+                            ).await).await
+                    })
+                    .map(|p| (p, mc.launcher.root_path.clone() / "libraries" / p.jar.to_path()))
+                    .map(|(p, jar)| (stream::iter(p.classpath.iter().map(|i|mc.launcher.root_path.clone() / "libraries" / i.to_path())
+                        .chain(std::iter::once(jar.clone()))
+                        .map(|BetterPathBuf(i)|i)
+                        .map(PathBuf::into_os_string)).enumerate()
+                        .fold(OsString::new(), |mut acc, (idx, item)| async move {
+                            if idx != 0 {
+                                acc.push(PATH_DELIMITER.bytes_as_os_str());
                             }
-                        }
-                        if res {
-                            continue;
-                        }
-                        let jar = mc.launcher.root_path.clone() / "libraries" / processor.jar.to_path();
-                        let args = [vec![
+                            acc.push(item);
+                            acc
+                        }), jar))
+                    .then(async |(classpath, jar)|
+                        Ok::<_, anyhow::Error>(vec![
                             OsString::from("-cp"),
-                            processor.classpath.iter().map(|i|mc.launcher.root_path.clone() / "libraries" / i.to_path())
-                                .chain(std::iter::once(jar.clone()))
-                                .map(|i|i.0)
-                                .map(PathBuf::into_os_string)
-                                .collect::<Vec<OsString>>().join(PATH_DELIMITER.bytes_as_os_str()),
+                            classpath.await,
                             get_main_class(&jar)?
-                        ], processor.args.iter().map(|v|transform_arguments(v, &installer_dir, &mc, &metadata)).collect()].concat();
-                        if !Command::new("java")
-                            .args(args)
+                        ])
+                    )
+                    .then(async |args|
+                        Command::new("java")
+                            .args(args?)
                             .stdout(Stdio::inherit())
                             .stderr(Stdio::inherit())
                             .stdin(Stdio::null())
                             .spawn()?
-                            .wait().await?.success() {
-                                return Err(anyhow!(t!("A processor failed to run!")).into()) // TODO: i18n
-                            }
-                    }
-                }
+                            .wait().await?.success().then(||()).ok_or(anyhow!(t!("A processor failed to run!")))
+                    )
+                    .try_collect::<()>().await?
             },
             InstallerProfile::Old(metadata) => {
                 if !T::SUPPORTS_OLDER_VERSION {

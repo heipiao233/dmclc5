@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}, version::MinecraftInstallation}, utils::BetterPathBuf};
+use crate::{LauncherContext, minecraft::login::{Account, AccountTrait}, utils::BetterPathBuf};
 
 /// An official account.
 #[derive(Serialize, Deserialize)]
@@ -160,7 +160,7 @@ impl AccountTrait for MicrosoftAccount {
         Ok(())
     }
 
-    async fn get_launch_jvmargs(&self, _: &MinecraftInstallation, _: &LauncherContext) -> Result<Vec<OsString>> {
+    async fn get_launch_jvmargs(&self, _: &LauncherContext) -> Result<Vec<OsString>> {
         Ok(vec![])
     }
 
