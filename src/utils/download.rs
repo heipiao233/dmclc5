@@ -8,7 +8,7 @@ use futures_util::{io::AllowStdIo, StreamExt};
 use reqwest::IntoUrl;
 use sha1::{Digest, Sha1, digest::Update};
 use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
-use tokio_util::compat::TokioAsyncReadCompatExt;
+use std::fs as sync_fs;
 
 use crate::minecraft::schemas::Resource;
 
@@ -16,8 +16,8 @@ use crate::minecraft::schemas::Resource;
 ///
 /// # Arguments
 /// * `T` - A hash algorithm like [Sha1] or [Sha256](sha2::Sha256)
-pub async fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str, size: usize) -> bool {
-    let meta = fs::metadata(&path).await;
+pub fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str, size: usize) -> bool {
+    let meta = sync_fs::metadata(&path);
     if meta.is_err() {
         return false;
     }
@@ -25,9 +25,9 @@ pub async fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str
     if size != 0 && meta.size() as usize != size {
         return false;
     }
-    if let Ok(f) = File::open(path).await {
+    if let Ok(mut f) = sync_fs::File::open(path) {
         let mut hash = AllowStdIo::new(digest_io::IoWrapper(T::new()));
-        if futures_util::io::copy(&mut f.compat(), &mut hash).await.is_err() {
+        if std::io::copy(&mut f, &mut hash).is_err() {
             return false;
         }
         hex::encode(hash.into_inner().0.finalize()) == digest
@@ -38,7 +38,7 @@ pub async fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str
 
 /// Download a [Resource] to the `path`.
 pub async fn download_res(res: &Resource, path: &Path) -> Result<()> {
-    if check_hash::<Sha1>(path, &res.sha1, res.size).await {
+    if check_hash::<Sha1>(path, &res.sha1, res.size) {
         return Ok(());
     }
     download(res.url.clone(), path).await
@@ -48,7 +48,7 @@ pub async fn download_res(res: &Resource, path: &Path) -> Result<()> {
 pub type DownloadAllMessage = std::result::Result<(PathBuf, FetchEvent), (PathBuf, anyhow::Error)>;
 
 async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
-    if !check_hash::<Sha1>(&path, &res.sha1, res.size).await {
+    if !check_hash::<Sha1>(&path, &res.sha1, res.size) {
         let _ = fs::create_dir_all(&path.as_ref().parent().unwrap()).await;
         Some((Source {
             dest: Arc::from(path.as_ref()),

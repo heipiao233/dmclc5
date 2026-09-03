@@ -1,16 +1,16 @@
 use std::{path::{Path, PathBuf}, process::Stdio, sync::Arc};
 
 use anyhow::Result;
-use dmclc5::{LauncherConfig, minecraft::{login::{Account, AccountTrait, microsoft::MicrosoftAccount}, schemas::VersionList}, utils::DownloadAllMessage};
+use dmclc5::{LauncherConfig, minecraft::{login::{Account::self, AccountTrait, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::DownloadAllMessage};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
         Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
-            println!("{} start: {len}", c.0.display());
+            println!("{} start: {len}", c.display());
         },
         Ok((c, async_fetcher::FetchEvent::Fetched)) => {
-            println!("{} end ({count})", c.0.display());
+            println!("{} end ({count})", c.display());
             *count -= 1;
         },
         Ok((_, async_fetcher::FetchEvent::Fetching)) => {
@@ -21,10 +21,10 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
             // println!("{} fetching: {prog}", c.0.display());
         },
         Ok((c, async_fetcher::FetchEvent::Retrying))=> {
-            println!("{} retrying", c.0.display());
+            println!("{} retrying", c.display());
         },
         Err((c, e)) => {
-            println!("{} error {e} ({count})", c.0.display());
+            println!("{} error {e} ({count})", c.display());
             *count -= 1;
         }
     }
@@ -32,11 +32,9 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
-    let launcher = {
-        let mut launcher = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries"), "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()).await?;
-        launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
-        Arc::new(launcher)
-    };
+    let mut launcher = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")/*, "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()*/)?;
+    launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
+    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test"), &launcher).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let message_handler = async move {
         let mut count = 0;
@@ -44,19 +42,20 @@ async fn real_main() -> Result<()> {
             handle_msg(next, &mut count).await;
         }
     };
-    let mc = vers.find_by_id("26.2").unwrap().install(launcher.clone(), "26.2", tx);
+    let mc = vers.find_by_id("26.2").unwrap().install(&prefix, "26.2", tx);
     let mc = tokio::join!(message_handler, mc).1?;
-    let msa = MicrosoftAccount::start_auth(&launcher).await?;
-    println!(
-        "Open this URL in your browser:\n{}\nand enter the code: {}",
-        msa.verification_uri().to_string(),
-        msa.user_code().secret().to_string()
-    );
-    let account: Account = MicrosoftAccount::login(&launcher, &msa).await?.into();
-    let account = account.check(&launcher).await?;
+    // let msa = MicrosoftAccount::start_auth(&launcher).await?;
+    // println!(
+    //     "Open this URL in your browser:\n{}\nand enter the code: {}",
+    //     msa.verification_uri().to_string(),
+    //     msa.user_code().secret().to_string()
+    // );
+    // let account: Account = MicrosoftAccount::login(&launcher, &msa).await?.into();
+    // let account = account.check(&launcher).await?;
+    let account = Account::OfflineAccount(OfflineAccount::new("heipiao".to_string()));
     if let Some(c) = &mc.extra_data.before_command {
-        let command = c.split(" ");
-        Command::new(command.next())
+        let mut command = c.split(" ");
+        Command::new(command.next().unwrap())
             .args(command)
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit())
@@ -73,6 +72,7 @@ async fn real_main() -> Result<()> {
     };
     let args = mc.launch_args(&account, tx);
     let args = tokio::join!(msg_handler, args).1?;
+    println!("{args:?}");
     Command::new(mc.extra_data.with_java.as_ref().map_or("java", String::as_str))
         .args(args)
         .stdout(Stdio::inherit())

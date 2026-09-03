@@ -10,7 +10,7 @@ use std::{collections::HashMap, fmt::{Debug, Display, Write}, path::{Path, PathB
 use anyhow::{anyhow, Result};
 use enum_dispatch::enum_dispatch;
 use join_string::Join;
-use tokio::fs;
+use std::fs;
 use versions::Versioning;
 
 use crate::{components::{install::ComponentInstallerTrait, mods::{fabric::FabricModLoader, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader, quilt::QuiltModLoader}}, minecraft::version::MinecraftInstallation};
@@ -274,14 +274,13 @@ impl <'c, 'p> MinecraftInstallation<'c, 'p> {
         }
         let mut mods: HashMap<String, HashMap<String, ModInfo>> = HashMap::new();
         let moddir: PathBuf = Path::join(&self.version_launch_work_dir, "mods");
-        let mut dir = fs::read_dir(&moddir).await?;
         let mut loaders = vec![];
         for i in &self.extra_data.components {
             let loader = i.name.get_mod_loaders(&i.version, &self.prefix.config).await?;
             loaders.extend(loader);
         }
-        while let Some(file) = dir.next_entry().await? {
-            if !file.file_type().await?.is_dir() {
+        for file in fs::read_dir(&moddir)? {
+            if let Ok(file) = file && !file.file_type()?.is_dir() {
                 let mut mods_in_file = HashMap::new();
                 for l in &loaders {
                     let infos = l.get_mods_in_file(&Path::join(&moddir, file.file_name()))?;

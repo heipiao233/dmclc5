@@ -1,9 +1,8 @@
 //! Manage game dirs
 
-use std::path::{Path, PathBuf};
+use std::{fs, path::{Path, PathBuf}};
 
 use anyhow::Result;
-use tokio::fs::{self, create_dir_all};
 
 use crate::{LauncherConfig, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::{merge_version_json, osstr_concat}};
 
@@ -19,24 +18,25 @@ pub struct MinecraftPrefix<'c> {
 
 impl <'c> MinecraftPrefix<'c> {
     /// Create a new prefix
-    pub fn new(path: PathBuf, config: &'c LauncherConfig) -> Self {
-        Self {
+    pub fn new(path: PathBuf, config: &'c LauncherConfig) -> Result<Self> {
+        let path = fs::canonicalize(path)?;
+        Ok(Self {
             versions_path: path.join("versions"),
             path,
             config
-        }
+        })
     }
     /// List the names of minecraft installations in the `root_path`.
-    pub async fn list_installations(&self) -> Result<Vec<String>> {
+    pub fn list_installations(&self) -> Result<Vec<String>> {
         let mut ret = Vec::new();
-        create_dir_all(&self.versions_path()).await?;
-        for i in std::fs::read_dir(&self.versions_path())? {
+        fs::create_dir_all(&self.versions_path())?;
+        for i in fs::read_dir(&self.versions_path())? {
             let dir = i?;
             if !dir.file_type()?.is_dir() {
                 continue;
             }
             let json_path = self.versions_path().join(dir.file_name()).join(osstr_concat(&dir.file_name(), &".json".to_string()));
-            if let Result::Ok(meta) = std::fs::metadata(&json_path) && meta.is_file() {
+            if let Result::Ok(meta) = fs::metadata(&json_path) && meta.is_file() {
                 ret.push(dir.file_name().to_string_lossy().to_string());
             }
         }
@@ -44,23 +44,23 @@ impl <'c> MinecraftPrefix<'c> {
     }
     
     /// Get one [MinecraftInstallation] by name in the `root_path`.
-    pub async fn get_installation<'p>(&'p self, name: &str) -> Option<MinecraftInstallation<'c, 'p>> {
+    pub fn get_installation<'p>(&'p self, name: &str) -> Option<MinecraftInstallation<'c, 'p>> {
         let version_dir = self.versions_path().join(name);
-        let meta = fs::metadata(&version_dir).await;
+        let meta = fs::metadata(&version_dir);
         if meta.is_err() || !meta.unwrap().is_dir() {
             return None;
         }
-        let json = fs::read(version_dir.join(name.to_string() + ".json")).await.ok()?;
+        let json = fs::read(version_dir.join(name.to_string() + ".json")).ok()?;
         let json = serde_json::from_slice(&json).ok()?;
-        let json: VersionJSON = self.resolve_inherits_from(json).await;
+        let json: VersionJSON = self.resolve_inherits_from(json);
         Some(MinecraftInstallation::new(self, json, name, None))
     }
     
-    async fn resolve_inherits_from(&self, base: VersionJSON) -> VersionJSON {
+    fn resolve_inherits_from(&self, base: VersionJSON) -> VersionJSON {
         let mut current = base;
         while let Some(father) = &current.get_base().inherits_from {
             let version_dir = self.versions_path().join(father);
-            let father = fs::read(version_dir.join(father.to_string() + ".json")).await.ok();
+            let father = fs::read(version_dir.join(father.to_string() + ".json")).ok();
             if father.is_none() {
                 return current;
             }

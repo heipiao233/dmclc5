@@ -155,7 +155,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                                 &PathBuf::from(name),
                                 &hash.into_string().unwrap(),
                                 0
-                            ).await).await
+                            )).await
                     })
                     .map(|p| (p, mc.prefix.config.get_libraries_path(p.jar.to_path())))
                     .map(|(p, jar)| (stream::iter(p.classpath.iter().map(|i|mc.prefix.config.get_libraries_path(i.to_path()))

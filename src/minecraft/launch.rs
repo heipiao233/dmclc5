@@ -121,7 +121,7 @@ impl MinecraftInstallation<'_, '_> {
     fn gen_classpath(&self) -> Vec<OsString> {
         self.obj.get_base().libraries.iter()
             .filter(|lib| check_rules(&lib.get_base().rules))
-            .filter(|lib| matches!(lib, Library::VanillaNatives(_)))
+            .filter(|lib| !matches!(lib, Library::VanillaNatives(_)))
             .map(|lib| (self.prefix.config.get_libraries_path(&lib.get_base().name.to_path())).into_os_string())
             .chain(iter::once(self.version_root.join(format!("{}.jar", self.name)).into_os_string()))
             .collect()

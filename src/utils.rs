@@ -69,13 +69,13 @@ pub fn check_rule(rule: &EnvRule) -> bool {
 
 /// Check [EnvRule]s.
 pub fn check_rules_no_option(rules: &Vec<EnvRule>) -> bool {
-    rules.iter()
+    rules.is_empty() || rules.iter()
         .any(check_rule)
 }
 
 /// Optionally check [EnvRule]s.
 pub fn check_rules(rules: &Option<Vec<EnvRule>>) -> bool {
-    rules.iter().flatten()
+    rules.as_ref().is_none_or(|v|v.is_empty()) || rules.iter().flatten()
         .any(check_rule)
 }
 

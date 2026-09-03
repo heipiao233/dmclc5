@@ -1,10 +1,10 @@
 //! Things about installing Minecraft.
 
-use std::{path::PathBuf, slice::Iter, vec};
+use std::{fs::File, io::Read, path::PathBuf, slice::Iter, vec};
 
 use anyhow::{Ok, Result};
 use sha1::Sha1;
-use tokio::{fs, io::AsyncReadExt, sync::mpsc};
+use tokio::{fs, sync::mpsc};
 
 use crate::{minecraft::prefix::MinecraftPrefix, utils::{DownloadAllMessage, check_hash, check_rules, download_all, download_txt, get_os}};
 
@@ -95,11 +95,11 @@ impl MinecraftInstallation<'_, '_> {
     async fn assets(&self) -> Result<Vec<(Resource, PathBuf)>> {
         let assets = &self.obj.get_base().asset_index;
         let asset_path = self.prefix.config.get_assets_path(format!("indexes/{}.json", assets.res.id));
-        let index = if !check_hash::<Sha1>(&asset_path, &assets.res.res.sha1, assets.res.res.size).await {
+        let index = if !check_hash::<Sha1>(&asset_path, &assets.res.res.sha1, assets.res.res.size) {
             download_txt(&assets.res.res.url, asset_path).await?
         } else {
             let mut str = String::new();
-            tokio::fs::File::open(asset_path).await?.read_to_string(&mut str).await?;
+            File::open(asset_path)?.read_to_string(&mut str)?;
             str
         };
         let index: AssetsIndex = serde_json::from_str(&index)?;
@@ -109,7 +109,7 @@ impl MinecraftInstallation<'_, '_> {
                 url: format!("https://resources.download.minecraft.net/{path}"),
                 sha1: asset.hash.clone(),
                 size: asset.size
-            }, self.prefix.config.get_assets_path(format!("assets/objects/{path}"))))
+            }, self.prefix.config.get_assets_path(format!("objects/{path}"))))
             .collect())
     }
 

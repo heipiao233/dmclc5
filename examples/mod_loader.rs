@@ -32,7 +32,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 #[tokio::main]
 async fn main() {
     let launcher: LauncherConfig = LauncherConfig::new("dmclc example mod_loader".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")).unwrap();
-    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test"), &launcher);
+    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test"), &launcher).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
         let mut count = 0;

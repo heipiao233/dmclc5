@@ -52,8 +52,8 @@ impl LauncherConfig {
         #[allow(unused_mut)]
         let mut ctx = LauncherConfig {
             // root_path,
-            assets_path,
-            libraries_path,
+            assets_path: assets_path.canonicalize()?,
+            libraries_path: libraries_path.canonicalize()?,
             http_client: Client::builder().user_agent(format!("{launcher_name}, based on heipiao233/dmclc5 (heipiao233@outlook.com)")).build()?,
             name: launcher_name,
             #[cfg(feature="msa_auth")]

@@ -54,7 +54,7 @@ msa_auth = ["dep:open", "dep:oauth2"]
 [[example]]
 name = "basic_minecraft"
 path = "examples/minecraft.rs"
-required-features = ["msa_auth"]
+# required-features = ["msa_auth"]
 
 [[example]]
 name = "contents"
