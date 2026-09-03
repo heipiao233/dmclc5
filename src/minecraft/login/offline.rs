@@ -50,7 +50,7 @@ impl AccountTrait for OfflineAccount {
         Ok(vec![])
     }
 
-    fn replace_launch_game_arg(&self, arg: &String) -> String {
+    fn replace_launch_game_arg(&self, arg: &str) -> String {
         arg.replace("${auth_player_name}", &self.0)
             .replace("${user_type}", "offline")
             .replace("${user_properties}", "{}")

@@ -101,7 +101,7 @@ where Account: From<Self> {
         self.1.get_launch_jvmargs(&self.0, launcher).await
     }
 
-    fn replace_launch_game_arg(&self, arg: &String) -> String {
+    fn replace_launch_game_arg(&self, arg: &str) -> String {
         let data = &self.0;
         arg.replace("${auth_access_token}", &data.at)
             .replace("${auth_session}", &data.at)

@@ -68,7 +68,7 @@ pub fn check_rule(rule: &EnvRule) -> bool {
 }
 
 /// Check [EnvRule]s.
-pub fn check_rules_no_option(rules: &Vec<EnvRule>) -> bool {
+pub fn check_rules_no_option(rules: &[EnvRule]) -> bool {
     rules.is_empty() || rules.iter()
         .any(check_rule)
 }

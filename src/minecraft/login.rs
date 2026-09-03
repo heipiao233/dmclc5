@@ -61,7 +61,7 @@ pub trait AccountTrait: Display + Sized {
     /// Get additional JVM arguments.
     async fn get_launch_jvmargs(&self, launcher: &LauncherConfig) -> Result<Vec<OsString>>;
     /// Get additional game arguments.
-    fn replace_launch_game_arg(&self, arg: &String) -> String;
+    fn replace_launch_game_arg(&self, arg: &str) -> String;
     /// Get log masks for security datas like access token, refresh token.
     /// If these strings appears in the log, the launcher should replace them with *** or other masks.
     fn get_log_masks(&self) -> Vec<String>;

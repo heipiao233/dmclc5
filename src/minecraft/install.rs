@@ -113,7 +113,7 @@ impl MinecraftInstallation<'_, '_> {
             .collect())
     }
 
-    pub(crate) fn libraries(&self, libraries: &Vec<Library>, always_download_nohash: bool) -> Vec<(Resource, PathBuf)> {
+    pub(crate) fn libraries(&self, libraries: &[Library], always_download_nohash: bool) -> Vec<(Resource, PathBuf)> {
         libraries.iter()
             .filter(|l| check_rules(&l.get_base().rules))
             .filter_map(|lib|
