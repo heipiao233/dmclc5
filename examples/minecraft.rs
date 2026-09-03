@@ -32,9 +32,9 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
-    let mut launcher = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")/*, "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()*/)?;
-    launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
-    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test"), &launcher).unwrap();
+    let mut config = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")/*, "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()*/)?;
+    config.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
+    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test")).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let message_handler = async move {
         let mut count = 0;
@@ -42,7 +42,7 @@ async fn real_main() -> Result<()> {
             handle_msg(next, &mut count).await;
         }
     };
-    let mc = vers.find_by_id("26.2").unwrap().install(&prefix, "26.2", tx);
+    let mc = vers.find_by_id("26.2").unwrap().install(&prefix, &config, "26.2", tx);
     let mc = tokio::join!(message_handler, mc).1?;
     // let msa = MicrosoftAccount::start_auth(&launcher).await?;
     // println!(

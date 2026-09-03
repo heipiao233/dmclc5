@@ -9,7 +9,7 @@ use serde_json::Value;
 use crate::components::{COMPONENTS, install::ComponentInstallerTrait};
 #[cfg(feature="components_installation")]
 use crate::components::install::ComponentInstaller;
-use crate::{minecraft::prefix::MinecraftPrefix};
+use crate::{LauncherConfig, minecraft::prefix::MinecraftPrefix};
 
 use super::schemas::VersionJSON;
 
@@ -55,24 +55,20 @@ pub struct DMCLCExtraData {
 }
 
 /// Represents a Minecraft installation.
-pub struct MinecraftInstallation<'c, 'p> {
+pub struct MinecraftInstallation<'c> {
     pub(crate) obj: VersionJSON,
     /// Some extra datas.
     pub extra_data: DMCLCExtraData,
-    pub(crate) prefix: &'p MinecraftPrefix<'c>,
+    pub(crate) config: &'c LauncherConfig,
     pub(crate) name: String,
     pub(crate) version_launch_work_dir: PathBuf,
     pub(crate) version_root: PathBuf
 }
 
-impl <'c, 'p> MinecraftInstallation<'c, 'p> {
-    pub(crate) fn new(prefix: &'p MinecraftPrefix<'c>, json: VersionJSON, name: &str, extras: Option<DMCLCExtraData>) -> Self {
+impl <'c> MinecraftInstallation<'c> {
+    pub(crate) fn new(prefix: &MinecraftPrefix, config: &'c LauncherConfig, json: VersionJSON, name: &str, extras: Option<DMCLCExtraData>) -> Self {
         let version_root = prefix.versions_path().join(name);
-        let extra_data = if let Some(e) = extras {
-            e
-        } else {
-            Self::get_extras(&version_root, &json, true)
-        };
+        let extra_data = extras.unwrap_or_else(|| Self::get_extras(&version_root, &json, true));
 
         let version_launch_work_dir = if extra_data.independent_game_dir {
             version_root.clone()
@@ -82,15 +78,14 @@ impl <'c, 'p> MinecraftInstallation<'c, 'p> {
         Self {
             obj: json,
             extra_data,
-            prefix,
+            config,
             name: name.to_string(),
             version_launch_work_dir,
             version_root
         }
     }
 
-    fn get_extras(
-        version_root: &Path, object: &VersionJSON, independent_game_dir: bool) -> DMCLCExtraData {
+    fn get_extras(version_root: &Path, object: &VersionJSON, independent_game_dir: bool) -> DMCLCExtraData {
         let path = version_root.join("dmclc_extras.json");
         if fs::metadata(&path).is_ok() && let Ok(f) = fs::File::open(&path) && let Ok(v) = serde_json::from_reader(f) {
             return v;

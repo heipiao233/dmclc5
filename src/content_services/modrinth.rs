@@ -246,7 +246,7 @@ impl Content for ModrinthProject {
      * @param forVersion The Minecraft version you download for.
      * @throws RequestError
      */
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_, '_>>, launcher: &LauncherConfig) -> Result<Vec<ModrinthContentVersion>> {
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_>>, launcher: &LauncherConfig) -> Result<Vec<ModrinthContentVersion>> {
         let query = if let Some(v) = for_version {
             #[cfg(feature="mod_loaders")]
             let loaders: String = serde_json::to_string(&v.extra_data.components.iter().map(|v|v.name.to_string()).collect::<Vec<String>>()).unwrap();
@@ -373,7 +373,7 @@ impl ContentService for ModrinthContentService {
         limit: usize,
         kind: super::ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation<'_, '_>>,
+        for_version: Option<&MinecraftInstallation<'_>>,
         launcher: &LauncherConfig
     ) -> Result<Vec<ModrinthProject>> {
         if let ContentType::World = kind {

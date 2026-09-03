@@ -31,8 +31,8 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 #[tokio::main]
 async fn main() {
-    let launcher: LauncherConfig = LauncherConfig::new("dmclc example mod_loader".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")).unwrap();
-    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test"), &launcher).unwrap();
+    let config: LauncherConfig = LauncherConfig::new("dmclc example mod_loader".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")).unwrap();
+    let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test")).unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {
         let mut count = 0;
@@ -41,7 +41,7 @@ async fn main() {
         }
     };
     let mc = VersionList::get_list().await.unwrap();
-    let mc = mc.find_by_id("1.20.4").unwrap().install(&prefix, "1.20.4-fabric", tx);
+    let mc = mc.find_by_id("1.20.4").unwrap().install(&prefix, &config, "1.20.4-fabric", tx);
     let mut mc = tokio::join!(handler, mc).1.unwrap();
     let (tx, mut rx) = mpsc::unbounded_channel();
     let handler = async move {

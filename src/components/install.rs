@@ -21,12 +21,12 @@ use crate::{LauncherConfig, components::install::{fabriclike::{FABRIC_INSTALLER,
 #[enum_dispatch(ComponentInstaller)]
 pub trait ComponentInstallerTrait {
     /// Get suitable versions for a [MinecraftInstallation].
-    async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation<'_, '_>) -> Result<Vec<String>>;
+    async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation<'_>) -> Result<Vec<String>>;
 
     /// Install for a [MinecraftInstallation].
     /// Clients should not call this directly, as it doesn't append [crate::minecraft::version::DMCLCExtraData::components]
     /// Insteadly, clients should call [MinecraftInstallation::install_component].
-    async fn install(&self, mc: &mut MinecraftInstallation<'_, '_>, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()>;
+    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()>;
 
     /// Find this component in a [MinecraftInstallation]. Returns the version of the component.
     fn find_in_version(&self, v: &VersionJSON) -> Option<String>;
@@ -73,7 +73,7 @@ impl FromStr for ComponentInstaller {
     }
 }
 
-impl MinecraftInstallation<'_, '_> {
+impl MinecraftInstallation<'_> {
     /// Install a component.
     pub async fn install_component(&mut self, component: ComponentInstaller, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         if let None = self.extra_data.version {

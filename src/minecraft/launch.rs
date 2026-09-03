@@ -11,14 +11,14 @@ use crate::{minecraft::login::AccountTrait, utils::{DownloadAllMessage, PATH_DEL
 
 use super::{login::Account, schemas::{Argument, Library, OneOrMoreArguments, VersionJSON}, version::MinecraftInstallation};
 
-impl MinecraftInstallation<'_, '_> {
+impl MinecraftInstallation<'_> {
     /// Generate the launch arguments.
     /// Please refresh account.
     /// Please run [super::version::DMCLCExtraData::before_command] before launching.
     /// Please use [super::version::DMCLCExtraData::with_java].
     /// Please set the work dir to [Self::get_cwd].
     pub async fn launch_args(&self, account: &Account, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<Vec<OsString>> {
-        account.prepare_launch(&self.version_launch_work_dir, self.prefix.config).await?;
+        account.prepare_launch(&self.version_launch_work_dir, self.config).await?;
         self.complete_files(false, false, download_channel).await?;
         self.unzip_natives()?;
         let mut args = vec![];
@@ -44,7 +44,7 @@ impl MinecraftInstallation<'_, '_> {
                     }
                 }
 
-                args.extend(account.get_launch_jvmargs(self.prefix.config).await?);
+                args.extend(account.get_launch_jvmargs(self.config).await?);
                 args.extend(self.extra_data.extra_jvm_arguments.clone().into_iter().flatten());
                 args.push(OsString::from(self.obj.get_base().main_class.clone()));
 
@@ -70,7 +70,7 @@ impl MinecraftInstallation<'_, '_> {
                     continue;
                 }
                 let native = &n.downloads.classifiers[env];
-                let libpath = self.prefix.config.get_libraries_path(&native.path);
+                let libpath = self.config.get_libraries_path(&native.path);
                 zip::ZipArchive::new(File::open(libpath)?)?.extract(self.version_root.join("natives"))?;
             }
         }
@@ -85,9 +85,9 @@ impl MinecraftInstallation<'_, '_> {
     fn transform_arg(&self, arg: &Argument, cp: &OsStr, account: &Account) -> Vec<OsString> {
         let auth_uuid = account.get_uuid().simple().to_string();
         let game_dir = self.version_launch_work_dir.as_os_str();
-        let assets_root = &self.prefix.config.assets_path;
+        let assets_root = &self.config.assets_path;
         let natives_dir = self.version_root.join("natives");
-        let libraries_dir = &self.prefix.config.libraries_path;
+        let libraries_dir = &self.config.libraries_path;
         let args = std::iter::once(arg)
             .filter_map(|arg| match arg {
                 Argument::String(s) => Some(Either::Left(once(s))),
@@ -109,7 +109,7 @@ impl MinecraftInstallation<'_, '_> {
                 .replace("${auth_uuid}", auth_uuid.as_str())
                 .replace("${version_type}", "DMCL5")
                 .replace("${natives_directory}", natives_dir.as_os_str())
-                .replace("${launcher_name}", self.prefix.config.name.as_str())
+                .replace("${launcher_name}", self.config.name.as_str())
                 .replace("${launcher_version}", "0.1")
                 .replace("${library_directory}", libraries_dir.as_os_str())
                 .replace("${classpath_separator}", PATH_DELIMITER)
@@ -122,7 +122,7 @@ impl MinecraftInstallation<'_, '_> {
         self.obj.get_base().libraries.iter()
             .filter(|lib| check_rules(&lib.get_base().rules))
             .filter(|lib| !matches!(lib, Library::VanillaNatives(_)))
-            .map(|lib| (self.prefix.config.get_libraries_path(lib.get_base().name.to_path())).into_os_string())
+            .map(|lib| (self.config.get_libraries_path(lib.get_base().name.to_path())).into_os_string())
             .chain(iter::once(self.version_root.join(format!("{}.jar", self.name)).into_os_string()))
             .collect()
     }

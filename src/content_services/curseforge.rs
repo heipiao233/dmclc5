@@ -217,7 +217,7 @@ impl Content for CurseforgeMod {
      * @param forVersion The Minecraft version you download for.
      * @throws RequestError
      */
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_, '_>>, launcher: &LauncherConfig) -> Result<Vec<CurseforgeModFile>> {
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_>>, launcher: &LauncherConfig) -> Result<Vec<CurseforgeModFile>> {
         let mut ret: Vec<CurseforgeModFile> = Vec::new();
         let mut index = 0;
         loop {
@@ -341,7 +341,7 @@ impl ContentService for CurseforgeContentService {
         limit: usize,
         kind: super::ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation<'_, '_>>,
+        for_version: Option<&MinecraftInstallation<'_>>,
         launcher: &LauncherConfig
     ) -> Result<Vec<CurseforgeMod>> {
         if ContentType::DataPack == kind {

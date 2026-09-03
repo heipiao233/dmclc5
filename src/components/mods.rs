@@ -235,13 +235,13 @@ pub fn check_mod_dependencies(mods: &HashMap<String, ModInfo>) -> Vec<ModIssue> 
     issues
 }
 
-impl <'c, 'p> MinecraftInstallation<'c, 'p> {
+impl MinecraftInstallation<'_> {
     /// Check if all the mod dependencies are met in the [MinecraftInstallation].
     pub async fn check_mod_dependencies(&self) -> Result<Vec<ModIssue>> {
         let mut mods: HashMap<String, ModInfo> = self.list_mods().await?.into_values().flat_map(HashMap::into_iter).collect();
         let mut loaders = vec![];
         for i in &self.extra_data.components {
-            let loader = i.name.get_mod_loaders(&i.version, &self.prefix.config).await?;
+            let loader = i.name.get_mod_loaders(&i.version, &self.config).await?;
             for l in &loader {
                 for m in l.get_builtin_mods() {
                     mods.insert(m.id.clone(), m);
@@ -276,7 +276,7 @@ impl <'c, 'p> MinecraftInstallation<'c, 'p> {
         let moddir: PathBuf = Path::join(&self.version_launch_work_dir, "mods");
         let mut loaders = vec![];
         for i in &self.extra_data.components {
-            let loader = i.name.get_mod_loaders(&i.version, &self.prefix.config).await?;
+            let loader = i.name.get_mod_loaders(&i.version, &self.config).await?;
             loaders.extend(loader);
         }
         for file in fs::read_dir(&moddir)? {
