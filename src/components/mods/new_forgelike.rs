@@ -1,14 +1,12 @@
 //! Implementation of [ModLoader] for Forge after 1.14 and NeoForge.
 
-use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}};
+use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}, path::Path};
 
 use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use versions::Versioning;
 use zip::ZipArchive;
 use crate::utils::deserialize_maven_version_range;
-
-use crate::utils::BetterPathBuf;
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
@@ -179,7 +177,7 @@ impl ModLoaderTrait for NewerForgeLikeModLoader {
         vec![self.builtin_mod.clone()]
     }
 
-    fn get_mods_in_file(&self, path: &BetterPathBuf) -> Result<Vec<ModInfo>> {
+    fn get_mods_in_file(&self, path: &Path) -> Result<Vec<ModInfo>> {
         self.get_mods_in_reader(File::open(path)?)
     }
 }

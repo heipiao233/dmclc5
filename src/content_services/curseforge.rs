@@ -1,6 +1,6 @@
 //! [CurseForge](https://www.curseforge.com/), operated by [OverWolf](https://www.overwolf.com/) based in Israel.
 
-use std::fmt::Debug;
+use std::{fmt::Debug, path::Path};
 
 use anyhow::Result;
 use futures::{StreamExt, TryStreamExt, stream};
@@ -12,7 +12,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 
 #[cfg(feature="mod_loaders")]
 use crate::components::install::ComponentInstaller;
-use crate::{minecraft::version::MinecraftInstallation, utils::BetterPathBuf, LauncherContext};
+use crate::{minecraft::version::MinecraftInstallation, LauncherConfig};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 #[cfg(feature="mod_loaders")]
@@ -199,13 +199,13 @@ impl Debug for CurseforgeModFile {
 }
 
 impl CurseforgeMod {
-    async fn from_id(id: &str, launcher: &LauncherContext) -> Result<Self> {
+    async fn from_id(id: &str, launcher: &LauncherConfig) -> Result<Self> {
         Ok(launcher.http_client.get(format!("https://api.curseforge.com/v1/mods/{id}")).header("x-api-key", API_KEY).send().await?.json::<DataWrapped<_>>().await?.data)
     }
 }
 
 impl CurseforgeModFile {
-    async fn from_id(modid: &str, id: &str, launcher: &LauncherContext) -> Result<Self> {
+    async fn from_id(modid: &str, id: &str, launcher: &LauncherConfig) -> Result<Self> {
         Ok(launcher.http_client.get(format!("https://api.curseforge.com/v1/mods/{modid}/files/{id}")).header("x-api-key", API_KEY).send().await?.json::<DataWrapped<_>>().await?.data)
     }
 }
@@ -217,7 +217,7 @@ impl Content for CurseforgeMod {
      * @param forVersion The Minecraft version you download for.
      * @throws RequestError
      */
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<CurseforgeModFile>> {
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_, '_>>, launcher: &LauncherConfig) -> Result<Vec<CurseforgeModFile>> {
         let mut ret: Vec<CurseforgeModFile> = Vec::new();
         let mut index = 0;
         loop {
@@ -254,7 +254,7 @@ impl Content for CurseforgeMod {
     fn get_description(&self) -> String {
         self.summary.clone()
     }
-    async fn get_body(&self, launcher: &LauncherContext) -> Result<String> {
+    async fn get_body(&self, launcher: &LauncherConfig) -> Result<String> {
         let res: DataWrapped<String> = launcher.http_client.get(format!("https://api.curseforge.com/v1/mods/{}/description", self.id)).header("x-api-key", API_KEY).send().await?.json().await?;
         Ok(res.data)
     }
@@ -313,14 +313,14 @@ impl ContentVersion for CurseforgeModFile {
     fn get_version_file_name(&self) -> String {
         self.file_name.clone()
     }
-    async fn get_version_changelog(&self, launcher: &LauncherContext) -> Result<String> {
+    async fn get_version_changelog(&self, launcher: &LauncherConfig) -> Result<String> {
         let res: DataWrapped<String> = launcher.http_client.get(format!("https://api.curseforge.com/v1/mods/{}/files/{}/changelog", self.mod_id, self.id)).send().await?.json().await?;
         Ok(res.data)
     }
     fn get_version_number(&self) -> String {
         self.display_name.clone()
     }
-    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<CurseforgeMod>>> {
+    async fn list_dependencies(&self, launcher: &LauncherConfig) -> Result<Vec<ContentDependency<CurseforgeMod>>> {
         stream::iter(&self.dependencies)
             .filter(|i| async { RelationType::RequiredDependency == i.relation_type })
             .then(|i| async {
@@ -341,8 +341,8 @@ impl ContentService for CurseforgeContentService {
         limit: usize,
         kind: super::ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation>,
-        launcher: &LauncherContext
+        for_version: Option<&MinecraftInstallation<'_, '_>>,
+        launcher: &LauncherConfig
     ) -> Result<Vec<CurseforgeMod>> {
         if ContentType::DataPack == kind {
             return Ok(vec![]);
@@ -380,7 +380,7 @@ impl ContentService for CurseforgeContentService {
         "featured".to_string()
     }
 
-    async fn get_content_version_from_file(&self, path: &BetterPathBuf, launcher: &LauncherContext) -> Result<Option<CurseforgeModFile>> {
+    async fn get_content_version_from_file(&self, path: &Path, launcher: &LauncherConfig) -> Result<Option<CurseforgeModFile>> {
         let mut data = String::new();
         File::open(path).await?.read_to_string(&mut data).await?;
         let data = data.into_bytes().into_iter().filter(|v|[0x9, 0xa, 0xd, 0x20].contains(v)).collect::<Vec<_>>();
@@ -396,11 +396,11 @@ impl ContentService for CurseforgeContentService {
         }
     }
 
-    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<CurseforgeMod>> {
+    async fn get_content_by_id(&self, id: &str, launcher: &LauncherConfig) -> Result<Option<CurseforgeMod>> {
         Ok(Some(CurseforgeMod::from_id(id, launcher).await?))
     }
 
-    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<CurseforgeModFile>> {
+    async fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherConfig) -> Result<Option<CurseforgeModFile>> {
         Ok(Some(CurseforgeModFile::from_id(content_id, id, launcher).await?))
     }
 }

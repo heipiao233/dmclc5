@@ -1,6 +1,5 @@
 //! Some utilities.
 
-mod better_path;
 mod download;
 pub mod maven_coord;
 
@@ -19,7 +18,6 @@ use versions::{Requirement, Versioning};
 use crate::components::mods::VersionBound;
 use crate::minecraft::schemas::{Arguments, EnvRule, OSType, VersionJSON};
 
-pub use self::better_path::BetterPathBuf;
 pub use self::download::{download, download_res, download_txt, download_all, check_hash, download_to_writer, DownloadAllMessage};
 
 #[cfg(not(target_os="windows"))]

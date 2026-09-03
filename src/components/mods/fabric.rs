@@ -1,13 +1,13 @@
 //! Implementation of [ModLoader] for Fabric Loader.
 
-use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}};
+use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use versions::{Requirement, Versioning};
 use zip::ZipArchive;
 
-use crate::utils::{json_newline_transform, BetterPathBuf};
+use crate::utils::json_newline_transform;
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
@@ -191,7 +191,7 @@ impl ModLoaderTrait for FabricModLoader {
         self.builtin_mods.clone().into_iter().flatten().collect()
     }
 
-    fn get_mods_in_file(&self, path: &BetterPathBuf) -> Result<Vec<ModInfo>> {
+    fn get_mods_in_file(&self, path: &Path) -> Result<Vec<ModInfo>> {
         self.get_mods_in_reader(File::open(path)?)
     }
 }

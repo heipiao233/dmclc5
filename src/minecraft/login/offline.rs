@@ -1,13 +1,13 @@
 //! The authentication method that allows offline launch.
 //! Please take care of anti priate.
 
-use std::{ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
 
-use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}}, utils::BetterPathBuf};
+use crate::{LauncherConfig, minecraft::{login::{Account, AccountTrait}}};
 
 
 /// An offline account, useful if no Internet.
@@ -34,7 +34,7 @@ impl OfflineAccount {
 }
 
 impl AccountTrait for OfflineAccount {
-    async fn check(self, _: &LauncherContext) -> Result<Account> {
+    async fn check(self, _: &LauncherConfig) -> Result<Account> {
         Ok(self.into())
     }
 
@@ -42,11 +42,11 @@ impl AccountTrait for OfflineAccount {
         self.1
     }
 
-    async fn prepare_launch(&self, _: &BetterPathBuf, _: &LauncherContext) -> Result<()> {
+    async fn prepare_launch(&self, _: &Path, _: &LauncherConfig) -> Result<()> {
         Ok(())
     }
 
-    async fn get_launch_jvmargs(&self, _: &LauncherContext) -> Result<Vec<OsString>> {
+    async fn get_launch_jvmargs(&self, _: &LauncherConfig) -> Result<Vec<OsString>> {
         Ok(vec![])
     }
 

@@ -2,7 +2,7 @@
 
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
-use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
+use crate::{LauncherConfig, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader, old_forge::OldForgeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
 use super::forgelike::ForgeLikeInstallerTrait;
 
@@ -17,7 +17,7 @@ impl ForgeLikeInstallerTrait for ForgeInstaller {
     const MAVEN_GROUP_URL: &'static str = "https://maven.minecraftforge.net/net/minecraftforge";
 
     #[cfg(feature = "mod_loaders")]
-    fn get_mod_loaders(version: &str, _: &LauncherContext) -> Vec<ModLoader> {
+    fn get_mod_loaders(version: &str, _: &LauncherConfig) -> Vec<ModLoader> {
         if version.split(".").nth(1).unwrap().parse::<usize>().unwrap() <= 13 {
             vec![OldForgeModLoader {
                 version: version.split("-").nth(1).unwrap().to_string()

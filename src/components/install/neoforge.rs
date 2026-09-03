@@ -2,7 +2,7 @@
 
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
-use crate::{LauncherContext, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
+use crate::{LauncherConfig, components::{install::{ComponentInstaller, forgelike::ForgeLikeInstaller}, mods::{ModInfo, new_forgelike::NewerForgeLikeModLoader}}, minecraft::schemas::{Argument, VersionJSON}};
 
 use super::forgelike::ForgeLikeInstallerTrait;
 
@@ -17,7 +17,7 @@ impl ForgeLikeInstallerTrait for NeoForgeInstaller {
     const MAVEN_GROUP_URL: &'static str = "https://maven.neoforged.net/releases/net/neoforged";
 
     #[cfg(feature = "mod_loaders")]
-    fn get_mod_loaders(version: &str, _: &LauncherContext) -> Vec<ModLoader> {
+    fn get_mod_loaders(version: &str, _: &LauncherConfig) -> Vec<ModLoader> {
         let id = if version.starts_with("1.20.1-") {
             "forge".to_string()
         } else {

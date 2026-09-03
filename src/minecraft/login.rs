@@ -5,14 +5,14 @@ pub mod microsoft;
 pub mod yggdrasil;
 pub mod offline;
 
-use std::{ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display, path::Path};
 
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::login::{offline::OfflineAccount, yggdrasil::{AuthlibInjectorAccount, MinecraftUniversalLoginAccount, YggdrasilAccount}}, utils::BetterPathBuf};
+use crate::{LauncherConfig, minecraft::login::{offline::OfflineAccount, yggdrasil::{AuthlibInjectorAccount, MinecraftUniversalLoginAccount, YggdrasilAccount}}};
 #[cfg(feature = "msa_auth")]
 use crate::minecraft::login::microsoft::MicrosoftAccount;
 
@@ -51,15 +51,15 @@ pub trait AccountTrait: Display + Sized {
 
     /// Refresh access token and check if this account can be used now.
     /// If this account is not initialized it should return false;
-    async fn check(self, launcher: &LauncherContext) -> Result<Account>;
+    async fn check(self, launcher: &LauncherConfig) -> Result<Account>;
 
     /// Get the account UUID.
     fn get_uuid(&self) -> Uuid;
 
     /// Prepare for launch.
-    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()>;
+    async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()>;
     /// Get additional JVM arguments.
-    async fn get_launch_jvmargs(&self, launcher: &LauncherContext) -> Result<Vec<OsString>>;
+    async fn get_launch_jvmargs(&self, launcher: &LauncherConfig) -> Result<Vec<OsString>>;
     /// Get additional game arguments.
     fn replace_launch_game_arg(&self, arg: &String) -> String;
     /// Get log masks for security datas like access token, refresh token.

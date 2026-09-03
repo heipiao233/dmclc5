@@ -1,5 +1,5 @@
 /// Things about downloading.
-use std::{os::unix::fs::MetadataExt, path::Path, sync::Arc, time::Duration};
+use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use async_fetcher::{FetchEvent, Fetcher, Source};
@@ -11,7 +11,6 @@ use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
 use crate::minecraft::schemas::Resource;
-use super::BetterPathBuf;
 
 /// Check the hash of a file.
 ///
@@ -46,7 +45,7 @@ pub async fn download_res(res: &Resource, path: &Path) -> Result<()> {
 }
 
 /// Messages for download_all in channel.
-pub type DownloadAllMessage = std::result::Result<(BetterPathBuf, FetchEvent), (BetterPathBuf, anyhow::Error)>;
+pub type DownloadAllMessage = std::result::Result<(PathBuf, FetchEvent), (PathBuf, anyhow::Error)>;
 
 async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
     if !check_hash::<Sha1>(&path, &res.sha1, res.size).await {
@@ -63,7 +62,7 @@ async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[B
 
 /// Download [Resource]s to paths.
 pub async fn download_all(
-    resources: Vec<(Resource, BetterPathBuf)>, channel: mpsc::UnboundedSender<DownloadAllMessage>,
+    resources: Vec<(Resource, PathBuf)>, channel: mpsc::UnboundedSender<DownloadAllMessage>,
     threads_per_file: u16, parallel_files: usize, retries: usize,
     mirror: Option<String>
 ) -> Result<()> {
@@ -93,13 +92,13 @@ pub async fn download_all(
         while let Some((path, _, result)) = fetcher.next().await {
             if let Err(e) = result {
                 let _ = tokio::fs::remove_file(&path).await;
-                let _ = channel2.send(Err((BetterPathBuf(path.to_path_buf()), e.into())));
+                let _ = channel2.send(Err((path.to_path_buf(), e.into())));
             }
         }
     };
     let send_task = async move {
         while let Some((path, _, event)) = rx.recv().await {
-            let _ = channel.send(Ok((BetterPathBuf(path.to_path_buf()), event)));
+            let _ = channel.send(Ok((path.to_path_buf(), event)));
         }
     };
     tokio::join!(fetch_task, send_task);

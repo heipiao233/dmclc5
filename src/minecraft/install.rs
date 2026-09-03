@@ -1,12 +1,12 @@
 //! Things about installing Minecraft.
 
-use std::{slice::Iter, sync::Arc, vec};
+use std::{path::PathBuf, slice::Iter, vec};
 
 use anyhow::{Ok, Result};
 use sha1::Sha1;
 use tokio::{fs, io::AsyncReadExt, sync::mpsc};
 
-use crate::{utils::{check_hash, check_rules, download_all, download_txt, get_os, BetterPathBuf, DownloadAllMessage}, LauncherContext};
+use crate::{minecraft::prefix::MinecraftPrefix, utils::{DownloadAllMessage, check_hash, check_rules, download_all, download_txt, get_os}};
 
 use super::{schemas::{AssetsIndex, Library, Resource, VersionJSON}, version::{DMCLCExtraData, MinecraftInstallation}};
 /// The version list of Minecraft.
@@ -55,14 +55,14 @@ impl IntoIterator for VersionList {
 
 impl VersionInfo {
     /// Install
-    pub async fn install<'l>(&self, launcher: Arc<LauncherContext>, name: &str, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<MinecraftInstallation> {
+    pub async fn install<'c, 'p>(&self, prefix: &'p MinecraftPrefix<'c>, name: &str, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<MinecraftInstallation<'c, 'p>> {
         let res = reqwest::get(&self.url).await?;
         let text = res.text().await?;
         let obj: VersionJSON = serde_json::from_str(&text)?;
-        let version_dir = launcher.root_path.clone() / "versions" / name;
+        let version_dir = prefix.versions_path().join(name);
         fs::create_dir_all(version_dir.clone()).await?;
-        fs::write(version_dir / format!("{name}.json"), text).await?;
-        let v = MinecraftInstallation::new(launcher, obj, name, Some(DMCLCExtraData {
+        fs::write(version_dir.join(format!("{name}.json")), text).await?;
+        let v = MinecraftInstallation::new(prefix, obj, name, Some(DMCLCExtraData {
             version: Some(self.id.clone()),
             components: vec![],
             independent_game_dir: true,
@@ -76,28 +76,27 @@ impl VersionInfo {
     }
 }
 
-impl MinecraftInstallation {
+impl MinecraftInstallation<'_, '_> {
     /// Download all the broken/missing files for the [MinecraftInstallation].
     pub async fn complete_files(&self, always_download_nohash: bool, fix_client_jar: bool, channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
-        let mut resources: Vec<(Resource, BetterPathBuf)> = Vec::new();
+        let mut resources: Vec<(Resource, PathBuf)> = Vec::new();
         let client_res = &self.obj.get_base().downloads.client;
-        let version_dir = self.launcher.root_path.clone() / "versions" / &self.name;
-        if fix_client_jar { resources.push((client_res.clone(), version_dir / format!("{}.jar", self.name))); }
+        if fix_client_jar { resources.push((client_res.clone(), self.version_root.join(format!("{}.jar", self.name)))); }
         resources.extend(self.assets().await?);
         resources.extend(self.libraries(&self.obj.get_base().libraries, always_download_nohash));
         download_all(
             resources, channel,
-            self.launcher.download_threads_per_file, self.launcher.download_parallel_files,
-            self.launcher.download_retries,self.launcher.bmclapi_mirror.clone()
+            self.prefix.config.download_threads_per_file, self.prefix.config.download_parallel_files,
+            self.prefix.config.download_retries,self.prefix.config.bmclapi_mirror.clone()
         ).await?;
         Ok(())
     }
 
-    async fn assets(&self) -> Result<Vec<(Resource, BetterPathBuf)>> {
+    async fn assets(&self) -> Result<Vec<(Resource, PathBuf)>> {
         let assets = &self.obj.get_base().asset_index;
-        let asset_path = self.launcher.root_path.clone() / "assets/indexes" / format!("{}.json", assets.res.id);
-        let index = if !check_hash::<Sha1>(asset_path.as_ref(), &assets.res.res.sha1, assets.res.res.size).await {
-            download_txt(&assets.res.res.url, asset_path.as_ref()).await?
+        let asset_path = self.prefix.config.get_assets_path(format!("indexes/{}.json", assets.res.id));
+        let index = if !check_hash::<Sha1>(&asset_path, &assets.res.res.sha1, assets.res.res.size).await {
+            download_txt(&assets.res.res.url, asset_path).await?
         } else {
             let mut str = String::new();
             tokio::fs::File::open(asset_path).await?.read_to_string(&mut str).await?;
@@ -110,12 +109,11 @@ impl MinecraftInstallation {
                 url: format!("https://resources.download.minecraft.net/{path}"),
                 sha1: asset.hash.clone(),
                 size: asset.size
-            }, self.launcher.root_path.clone() / "assets/objects" / &path))
+            }, self.prefix.config.get_assets_path(format!("assets/objects/{path}"))))
             .collect())
     }
 
-    pub(crate) fn libraries(&self, libraries: &Vec<Library>, always_download_nohash: bool) -> Vec<(Resource, BetterPathBuf)> {
-        let lib_path = self.launcher.root_path.clone() / "libraries";
+    pub(crate) fn libraries(&self, libraries: &Vec<Library>, always_download_nohash: bool) -> Vec<(Resource, PathBuf)> {
         libraries.iter()
             .filter(|l| check_rules(&l.get_base().rules))
             .filter_map(|lib|
@@ -125,28 +123,28 @@ impl MinecraftInstallation {
                             url: format!("{}/{}", l.url, l.base.name.to_path()),
                             sha1: l.sha1.clone(),
                             size: l.size
-                        }, lib_path.clone() / l.base.name.to_path()))
+                        }, self.prefix.config.get_libraries_path(l.base.name.to_path())))
                     },
                     Library::FabricOldForgeAndLiteLoader(l) if l.clientreq => {
                         Some((Resource {
                             url: format!("{}/{}", l.url, l.base.name.to_path()),
                             sha1: always_download_nohash.to_string(),
                             size: 0
-                        }, lib_path.clone() / l.base.name.to_path()))
+                        }, self.prefix.config.get_libraries_path(l.base.name.to_path())))
                     }
                     Library::VanillaForgeAndNeo(l) => {
-                        Some((l.downloads.artifact.res.clone(), lib_path.clone() / &l.downloads.artifact.path))
+                        Some((l.downloads.artifact.res.clone(), self.prefix.config.get_libraries_path(&l.downloads.artifact.path)))
                     }
                     Library::VanillaNatives(l) if let Some(os) = l.natives.get(&get_os()) => {
                         let artifact = l.downloads.classifiers.get(os).unwrap();
-                        Some((artifact.res.clone(), lib_path.clone() / &artifact.path))
+                        Some((artifact.res.clone(), self.prefix.config.get_libraries_path(&artifact.path)))
                     }
                     Library::BaseOnly(l) => {
                         Some((Resource {
                             url: format!("https://libraries.minecraft.net/{}", l.name.to_path()),
                             sha1: always_download_nohash.to_string(),
                             size: 0
-                        }, lib_path.clone() / l.name.to_path()))
+                        }, self.prefix.config.get_libraries_path(l.name.to_path())))
                     }
                     _ => None
                 })

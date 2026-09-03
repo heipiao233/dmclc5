@@ -5,3 +5,4 @@ pub mod schemas;
 pub mod version;
 pub mod launch;
 pub mod login;
+pub mod prefix;

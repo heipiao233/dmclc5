@@ -1,6 +1,6 @@
 //! Implementation of [ComponentInstaller] for Forge-like installers.
 
-use std::{collections::HashMap, ffi::OsString, io::Read, path::PathBuf, process::Stdio};
+use std::{collections::HashMap, ffi::OsString, io::Read, path::{Path, PathBuf}, process::Stdio};
 
 use anyhow::{anyhow, Result};
 use fs_extra::dir::CopyOptions;
@@ -12,7 +12,7 @@ use tokio::{fs, process::Command, sync::mpsc};
 
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
-use crate::{LauncherContext, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{BetterPathBuf, DownloadAllMessage, PATH_DELIMITER, check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
+use crate::{LauncherConfig, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{DownloadAllMessage, PATH_DELIMITER, check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
 
 use super::ComponentInstallerTrait;
 
@@ -76,7 +76,7 @@ pub trait ForgeLikeInstallerTrait {
     const MAVEN_GROUP_URL: &'static str;
     /// Get the mod loaders it provides.
     #[cfg(feature = "mod_loaders")]
-    fn get_mod_loaders(version: &str, launcher: &LauncherContext) -> Vec<ModLoader>;
+    fn get_mod_loaders(version: &str, launcher: &LauncherConfig) -> Vec<ModLoader>;
     /// Find the component in the [VersionJSON]. Returns the component version.
     fn find_in_version(mc: &VersionJSON) -> Option<String>;
     /// Returns the Maven archive base name in the repository.
@@ -92,11 +92,11 @@ pub struct ForgeLikeInstaller<T: ForgeLikeInstallerTrait>(pub(in crate::componen
 impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller<T> {
 
     #[cfg(feature = "mod_loaders")]
-    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherContext) -> Result<Vec<ModLoader>> {
+    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>> {
         Ok(T::get_mod_loaders(version, launcher))
     }
 
-    async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation) -> Result<Vec<String>>  {
+    async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation<'_, '_>) -> Result<Vec<String>>  {
         let version = mc.extra_data.version.as_ref().unwrap().clone();
         let mut version_split = version.split(".");
         version_split.next();
@@ -112,36 +112,37 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
             .filter(|v| T::match_version(&v, &mc.extra_data.version.as_ref().unwrap())).collect())
     }
 
-    async fn install(&self, mc: &mut MinecraftInstallation, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
+    async fn install(&self, mc: &mut MinecraftInstallation<'_, '_>, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
         let mcver = mc.extra_data.version.as_ref().unwrap().clone();
         let mut tmpfile = tokio::fs::File::from_std(tempfile::tempfile()?);
         let url = format!("{}/{1}/{version}/{}-{version}-installer.jar", T::MAVEN_GROUP_URL, T::get_archive_base_name(&mcver));
         download_to_writer(&url, &mut tmpfile).await?;
-        let installer_dir = &BetterPathBuf(tempfile::tempdir()?.keep());
+        let temp_dir = tempfile::tempdir()?;
+        let installer_dir = temp_dir.path();
         zip::ZipArchive::new(tmpfile.into_std().await)?.extract(installer_dir)?;
-        let metadata: InstallerProfile = serde_json::from_reader(std::fs::File::open(installer_dir.clone() / "install_profile.json")?)?;
+        let metadata: InstallerProfile = serde_json::from_reader(std::fs::File::open(installer_dir.join("install_profile.json"))?)?;
         let result;
         match metadata {
             InstallerProfile::New(metadata) => {
                 if metadata.data.contains_key("MOJMAPS") {
                     let id = &metadata.data["MOJMAPS"].client;
                     let id: String = id.chars().skip(1).take(id.len() - 2).collect();
-                    let path = mc.launcher.root_path.clone() / "libraries" / expand_maven_id(&id);
+                    let path = mc.prefix.config.get_libraries_path(expand_maven_id(&id));
                     download_res(mc.obj.get_base().downloads.client_mappings.as_ref().unwrap(), path.as_ref()).await?;
                 }
-                let maven_dir = installer_dir.clone() / "maven";
+                let maven_dir = installer_dir.join("maven");
                 if let Ok(f) = fs::metadata(&maven_dir).await && f.is_dir() {
-                    fs_extra::dir::copy(&maven_dir, mc.launcher.root_path.clone() / "libraries", &CopyOptions::new().content_only(true))?;
+                    fs_extra::dir::copy(&maven_dir, &mc.prefix.config.libraries_path, &CopyOptions::new().content_only(true))?;
                 }
                 let mut res = mc.libraries(&metadata.libraries, false);
                 let target = &mc.obj;
-                let source: VersionJSON = serde_json::from_reader(std::fs::File::open(installer_dir.clone() / "version.json")?)?;
+                let source: VersionJSON = serde_json::from_reader(std::fs::File::open(installer_dir.join("version.json"))?)?;
                 result = merge_version_json(target, &source)?;
                 res.extend(mc.libraries(&source.get_base().libraries, false));
                 download_all(
-                    res, download_channel, mc.launcher.download_threads_per_file,
-                    mc.launcher.download_parallel_files, mc.launcher.download_retries,
-                    mc.launcher.bmclapi_mirror.clone()
+                    res, download_channel, mc.prefix.config.download_threads_per_file,
+                    mc.prefix.config.download_parallel_files, mc.prefix.config.download_retries,
+                    mc.prefix.config.bmclapi_mirror.clone()
                 ).await?;
 
                 stream::iter(&metadata.processors)
@@ -156,10 +157,9 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                                 0
                             ).await).await
                     })
-                    .map(|p| (p, mc.launcher.root_path.clone() / "libraries" / p.jar.to_path()))
-                    .map(|(p, jar)| (stream::iter(p.classpath.iter().map(|i|mc.launcher.root_path.clone() / "libraries" / i.to_path())
+                    .map(|p| (p, mc.prefix.config.get_libraries_path(p.jar.to_path())))
+                    .map(|(p, jar)| (stream::iter(p.classpath.iter().map(|i|mc.prefix.config.get_libraries_path(i.to_path()))
                         .chain(std::iter::once(jar.clone()))
-                        .map(|BetterPathBuf(i)|i)
                         .map(PathBuf::into_os_string)).enumerate()
                         .fold(OsString::new(), |mut acc, (idx, item)| async move {
                             if idx != 0 {
@@ -193,10 +193,10 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                 let target = &mc.obj;
                 let source: VersionJSON = metadata.version_info;
                 result = merge_version_json(target, &source)?;
-                tokio::fs::copy(installer_dir.clone() / metadata.install.file_path, mc.launcher.root_path.clone() / "libraries" / metadata.install.path.to_path()).await?;
+                tokio::fs::copy(installer_dir.join(metadata.install.file_path), mc.prefix.config.get_libraries_path(metadata.install.path.to_path())).await?;
             }
         }
-        serde_json::to_writer(&std::fs::File::create(mc.version_root.clone() / (mc.name.to_string() + ".json"))?, &result)?;
+        serde_json::to_writer(&std::fs::File::create(mc.version_root.join(mc.name.to_string() + ".json"))?, &result)?;
         mc.obj = result;
         Ok(())
     }
@@ -206,7 +206,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
     }
 }
 
-fn get_main_class(path: &BetterPathBuf) -> Result<OsString> {
+fn get_main_class(path: &Path) -> Result<OsString> {
     let mut file = zip::ZipArchive::new(std::fs::File::open(path)?)?;
     let mut manifest = file.by_name("META-INF/MANIFEST.MF")?;
     let mut manifest_content = String::new();
@@ -218,17 +218,17 @@ fn get_main_class(path: &BetterPathBuf) -> Result<OsString> {
     Ok(OsString::from(line))
 }
 
-fn transform_arguments(arg: &str, installer_path: &BetterPathBuf, mc: &MinecraftInstallation, metadata: &InstallerProfileNew) -> OsString {
+fn transform_arguments(arg: &str, installer_path: &Path, mc: &MinecraftInstallation, metadata: &InstallerProfileNew) -> OsString {
     let content = arg.chars().skip(1).take(arg.len() - 2).collect::<String>();
     if arg.starts_with("{") && arg.ends_with("}") {
         return match content.as_str() {
             "SIDE" => OsString::from("client"),
-            "MINECRAFT_JAR" => (mc.version_root.clone() / (mc.name.clone() + ".jar")).0.into_os_string(),
-            "BINPATCH" => (installer_path.clone() / "data/client.lzma").0.into_os_string(),
+            "MINECRAFT_JAR" => (mc.version_root.join(mc.name.clone() + ".jar")).into_os_string(),
+            "BINPATCH" => installer_path.join("data/client.lzma").into_os_string(),
             other => transform_arguments(&metadata.data[other].client, installer_path, mc, metadata)
         };
     } else if arg.starts_with("[") && arg.ends_with("]") {
-        return (mc.launcher.root_path.clone() / "libraries" / expand_maven_id(&content)).0.into_os_string();
+        return mc.prefix.config.get_libraries_path(expand_maven_id(&content)).into_os_string();
     }
     return arg.into();
 }

@@ -4,9 +4,11 @@
 pub mod modrinth;
 pub mod curseforge;
 
+use std::path::Path;
+
 use anyhow::Result;
 
-use crate::{LauncherContext, future, minecraft::version::MinecraftInstallation, utils::BetterPathBuf};
+use crate::{LauncherConfig, future, minecraft::version::MinecraftInstallation};
 
 /// Type of contents.
 #[derive(PartialEq, Eq, Hash)]
@@ -33,13 +35,13 @@ pub trait Content {
     /// type of [ContentVersion] provided by this type of [Content].
     type V: ContentVersion;
     /// List downloadable versions.
-    fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> future!(Result<Vec<Self::V>>);
+    fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherConfig) -> future!(Result<Vec<Self::V>>);
     /// Get title.
     fn get_title(&self) -> String;
     /// Get description.
     fn get_description(&self) -> String;
     /// Get content body article in HTML.
-    fn get_body(&self, launcher: &LauncherContext) -> future!(Result<String>);
+    fn get_body(&self, launcher: &LauncherConfig) -> future!(Result<String>);
     /// Get icon url.
     fn get_icon_url(&self) -> Option<String>;
     /// Get url for issue, Discord, source....
@@ -68,11 +70,11 @@ pub trait ContentVersion {
     /// Get file name.
     fn get_version_file_name(&self) -> String;
     /// Get changelog in HTML.
-    fn get_version_changelog(&self, launcher: &LauncherContext) -> future!(Result<String>);
+    fn get_version_changelog(&self, launcher: &LauncherConfig) -> future!(Result<String>);
     /// Get version number.
     fn get_version_number(&self) -> String;
     /// List the dependencies.
-    fn list_dependencies(&self, launcher: &LauncherContext) -> future!(Result<Vec<ContentDependency<Self::C>>>);
+    fn list_dependencies(&self, launcher: &LauncherConfig) -> future!(Result<Vec<ContentDependency<Self::C>>>);
 }
 
 /// Represents the dependencies.
@@ -97,7 +99,7 @@ pub trait ContentService {
         kind: ContentType,
         sort_field: usize,
         for_version: Option<&MinecraftInstallation>,
-        launcher: &LauncherContext
+        launcher: &LauncherConfig
     ) -> future!(Result<Vec<Self::C>>);
     /// Get unsupported [ContentType]s.
     fn get_unsupported_content_types(&self) -> Vec<ContentType>;
@@ -106,11 +108,11 @@ pub trait ContentService {
     /// Get the default sort field.
     fn get_default_sort_field(&self) -> String;
     /// Get a [ContentVersion] from a file.
-    fn get_content_version_from_file(&self, path: &BetterPathBuf, launcher: &LauncherContext) -> future!(Result<Option<<Self::C as Content>::V>>);
+    fn get_content_version_from_file(&self, path: &Path, launcher: &LauncherConfig) -> future!(Result<Option<<Self::C as Content>::V>>);
 
     /// Get a [Content] by ID.
-    fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> future!(Result<Option<Self::C>>);
+    fn get_content_by_id(&self, id: &str, launcher: &LauncherConfig) -> future!(Result<Option<Self::C>>);
 
     /// Get a [ContentVersion] by ID.
-    fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherContext) -> future!(Result<Option<<Self::C as Content>::V>>);
+    fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherConfig) -> future!(Result<Option<<Self::C as Content>::V>>);
 }

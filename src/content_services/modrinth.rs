@@ -1,6 +1,6 @@
 //! [Modrinth](https://modrinth.com/), operated by [Spark Universe](https://sparkuniverse.com/) based in Germany.
 
-use std::{fmt::Debug, sync::LazyLock};
+use std::{fmt::Debug, path::Path, sync::LazyLock};
 
 use anyhow::{anyhow, Error, Result};
 use futures_util::io::AllowStdIo;
@@ -11,7 +11,7 @@ use sha1::{Digest, Sha1};
 use tokio::fs::File;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::{minecraft::version::MinecraftInstallation, utils::BetterPathBuf, LauncherContext};
+use crate::{minecraft::version::MinecraftInstallation, LauncherConfig};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 
@@ -228,13 +228,13 @@ impl Debug for ModrinthContentVersion {
 pub struct ModrinthContentVersion(ModrinthVersionModel, ModrinthFile);
 
 impl ModrinthProject {
-    async fn from_id(id: &str, launcher: &LauncherContext) -> Result<Self> {
+    async fn from_id(id: &str, launcher: &LauncherConfig) -> Result<Self> {
         Ok(launcher.http_client.get(format!("https://api.modrinth.com/v2/project/{id}")).send().await?.json().await?)
     }
 }
 
 impl ModrinthContentVersion {
-    async fn from_id(id: &str, launcher: &LauncherContext) -> Result<Self> {
+    async fn from_id(id: &str, launcher: &LauncherConfig) -> Result<Self> {
         Ok(Self::new(launcher.http_client.get(format!("https://api.modrinth.com/v2/version/{id}")).send().await?.json().await?))
     }
 }
@@ -246,7 +246,7 @@ impl Content for ModrinthProject {
      * @param forVersion The Minecraft version you download for.
      * @throws RequestError
      */
-    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation>, launcher: &LauncherContext) -> Result<Vec<ModrinthContentVersion>> {
+    async fn list_downloadable_versions(&self, for_version: Option<&MinecraftInstallation<'_, '_>>, launcher: &LauncherConfig) -> Result<Vec<ModrinthContentVersion>> {
         let query = if let Some(v) = for_version {
             #[cfg(feature="mod_loaders")]
             let loaders: String = serde_json::to_string(&v.extra_data.components.iter().map(|v|v.name.to_string()).collect::<Vec<String>>()).unwrap();
@@ -267,7 +267,7 @@ impl Content for ModrinthProject {
     fn get_description(&self) -> String {
         self.description.clone()
     }
-    async fn get_body(&self, _: &LauncherContext) -> Result<String> {
+    async fn get_body(&self, _: &LauncherConfig) -> Result<String> {
         Ok(MARKDOWN.parse(&self.body.clone().unwrap_or_default()).render())
     }
     fn get_icon_url(&self) -> Option<String> {
@@ -335,13 +335,13 @@ impl ContentVersion for ModrinthContentVersion {
     fn get_version_file_name(&self) -> String {
         self.1.filename.clone()
     }
-    async fn get_version_changelog(&self, _: &LauncherContext) -> Result<String> {
+    async fn get_version_changelog(&self, _: &LauncherConfig) -> Result<String> {
         Ok(MARKDOWN.parse(&self.0.changelog.as_ref().unwrap_or(&"".to_string())).render())
     }
     fn get_version_number(&self) -> String {
         self.0.version_number.clone()
     }
-    async fn list_dependencies(&self, launcher: &LauncherContext) -> Result<Vec<ContentDependency<ModrinthProject>>> {
+    async fn list_dependencies(&self, launcher: &LauncherConfig) -> Result<Vec<ContentDependency<ModrinthProject>>> {
         let mut deps: Vec<ContentDependency<ModrinthProject>> = Vec::new();
         for i in &self.0.dependencies {
             if let Some(DependencyType::Incompatible | DependencyType::Embedded) | None = i.dependency_type {
@@ -373,8 +373,8 @@ impl ContentService for ModrinthContentService {
         limit: usize,
         kind: super::ContentType,
         sort_field: usize,
-        for_version: Option<&MinecraftInstallation>,
-        launcher: &LauncherContext
+        for_version: Option<&MinecraftInstallation<'_, '_>>,
+        launcher: &LauncherConfig
     ) -> Result<Vec<ModrinthProject>> {
         if let ContentType::World = kind {
             return Ok(vec![]);
@@ -428,7 +428,7 @@ impl ContentService for ModrinthContentService {
         "relevance".to_string()
     }
 
-    async fn get_content_version_from_file(&self, path: &BetterPathBuf, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
+    async fn get_content_version_from_file(&self, path: &Path, launcher: &LauncherConfig) -> Result<Option<ModrinthContentVersion>> {
         let mut sha1 = AllowStdIo::new(digest_io::IoWrapper(Sha1::new()));
         futures_util::io::copy(File::open(path).await?.compat(), &mut sha1).await?;
         let res = launcher.http_client.get(format!("https://api.modrinth.com/v2/version/version_file/{}?algorithm=sha1", hex::encode_upper(sha1.into_inner().0.finalize()))).send().await?;
@@ -439,11 +439,11 @@ impl ContentService for ModrinthContentService {
         }
     }
 
-    async fn get_content_by_id(&self, id: &str, launcher: &LauncherContext) -> Result<Option<ModrinthProject>> {
+    async fn get_content_by_id(&self, id: &str, launcher: &LauncherConfig) -> Result<Option<ModrinthProject>> {
         Ok(Some(ModrinthProject::from_id(id, launcher).await?))
     }
 
-    async fn get_content_version_by_id(&self, _content_id: &str, id: &str, launcher: &LauncherContext) -> Result<Option<ModrinthContentVersion>> {
+    async fn get_content_version_by_id(&self, _content_id: &str, id: &str, launcher: &LauncherConfig) -> Result<Option<ModrinthContentVersion>> {
         Ok(Some(ModrinthContentVersion::from_id(id, launcher).await?))
     }
 }

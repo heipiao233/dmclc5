@@ -3,7 +3,7 @@
 pub(crate) mod mul;
 pub(crate) mod ali;
 
-use std::{ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display, path::Path};
 
 use anyhow::{Result, anyhow};
 use enum_dispatch::enum_dispatch;
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::{login::{Account, AccountTrait}}, utils::BetterPathBuf};
+use crate::{LauncherConfig, minecraft::{login::{Account, AccountTrait}}};
 pub use ali::AuthlibInjectorAccount;
 pub use mul::MinecraftUniversalLoginAccount;
 
@@ -60,14 +60,14 @@ impl <A: YggdrasilAccountTrait> Display for YggdrasilAccount<A> {
 #[allow(async_fn_in_trait)]
 pub trait YggdrasilAccountTrait {
     /// Prepare for launch.
-    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()>;
+    async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()>;
     /// Get additional JVM arguments.
-    async fn get_launch_jvmargs(&self, data: &YggdrasilUserData, launcher: &LauncherContext) -> Result<Vec<OsString>>;
+    async fn get_launch_jvmargs(&self, data: &YggdrasilUserData, launcher: &LauncherConfig) -> Result<Vec<OsString>>;
 }
 
 impl <A: YggdrasilAccountTrait> AccountTrait for YggdrasilAccount<A>
 where Account: From<Self> {
-    async fn check(self, launcher: &LauncherContext) -> Result<Account> {
+    async fn check(self, launcher: &LauncherConfig) -> Result<Account> {
         let data = &self.0;
         let req: Value = json!({
             "accessToken": data.at,
@@ -93,11 +93,11 @@ where Account: From<Self> {
         self.0.uuid
     }
 
-    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, launcher: &LauncherContext) -> Result<()> {
+    async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()> {
         self.1.prepare_launch(version_launch_dir, launcher).await
     }
 
-    async fn get_launch_jvmargs(&self, launcher: &LauncherContext) -> Result<Vec<OsString>> {
+    async fn get_launch_jvmargs(&self, launcher: &LauncherConfig) -> Result<Vec<OsString>> {
         self.1.get_launch_jvmargs(&self.0, launcher).await
     }
 
@@ -124,7 +124,7 @@ pub struct YggdrasilAuthInfo {
 }
 
 /// Login to a Yggdrasil server, return tokens and profiles.
-pub async fn auth(launcher: &LauncherContext, api_url: String, username: String, password: String) -> Result<(YggdrasilAuthInfo, Vec<Profile>)> {
+pub async fn auth(launcher: &LauncherConfig, api_url: String, username: String, password: String) -> Result<(YggdrasilAuthInfo, Vec<Profile>)> {
     let http = &launcher.http_client;
 
     let meta: Value = http.get(&api_url).send().await?.json().await?;

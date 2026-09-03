@@ -1,6 +1,6 @@
 //! The authentication method that Mojang uses now.
 
-use std::{ffi::OsString, fmt::Display};
+use std::{ffi::OsString, fmt::Display, path::Path};
 
 use anyhow::{anyhow, Ok, Result};
 use oauth2::{RefreshToken, Scope, TokenResponse};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherContext, minecraft::login::{Account, AccountTrait}, utils::BetterPathBuf};
+use crate::{LauncherConfig, minecraft::login::{Account, AccountTrait}};
 
 /// An official account.
 #[derive(Serialize, Deserialize)]
@@ -23,7 +23,7 @@ pub struct MicrosoftAccount {
 impl MicrosoftAccount {
     /// Begin with a creating of a [MicrosoftAccount]
     /// Show the [oauth2::StandardDeviceAuthorizationResponse] to your user.
-    pub async fn start_auth(launcher: &LauncherContext) -> Result<oauth2::StandardDeviceAuthorizationResponse> {
+    pub async fn start_auth(launcher: &LauncherConfig) -> Result<oauth2::StandardDeviceAuthorizationResponse> {
         Ok(launcher.oauth2.exchange_device_code()
             .add_scope(Scope::new("XboxLive.signin".to_string()))
             .add_scope(Scope::new("offline_access".to_string()))
@@ -32,7 +32,7 @@ impl MicrosoftAccount {
 
     /// Begin with a creating of a [MicrosoftAccount]
     /// See: [Self::start_auth]
-    pub async fn login(launcher: &LauncherContext, device_auth: &oauth2::StandardDeviceAuthorizationResponse) -> Result<Self> {
+    pub async fn login(launcher: &LauncherConfig, device_auth: &oauth2::StandardDeviceAuthorizationResponse) -> Result<Self> {
         let dev_flow_res = launcher.oauth2.exchange_device_access_token(&device_auth)
             .request_async(&launcher.http_client, tokio::time::sleep, None).await?;
         let next = Self::next_steps(dev_flow_res.access_token().secret(), &launcher).await?;
@@ -50,11 +50,11 @@ impl MicrosoftAccount {
         })
     }
 
-    fn keyring_entry(&self, launcher: &LauncherContext) -> Result<keyring::Entry> {
+    fn keyring_entry(&self, launcher: &LauncherConfig) -> Result<keyring::Entry> {
         Ok(keyring::Entry::new(&format!("{} microsoft account", launcher.name), &self.uuid.to_string())?)
     }
 
-    async fn next_steps(access_token: &str, launcher: &LauncherContext) -> Result<(Uuid, String, String)> {
+    async fn next_steps(access_token: &str, launcher: &LauncherConfig) -> Result<(Uuid, String, String)> {
         // XBL
         let xbl_req = json!(
             {
@@ -133,7 +133,7 @@ impl Display for MicrosoftAccount {
 }
 
 impl AccountTrait for MicrosoftAccount {
-    async fn check(self, launcher: &LauncherContext) -> Result<Account> {
+    async fn check(self, launcher: &LauncherConfig) -> Result<Account> {
         let refresh_token = if let Some(rt) = self.refresh_token {
             rt.clone()
         } else {
@@ -156,11 +156,11 @@ impl AccountTrait for MicrosoftAccount {
         self.uuid
     }
 
-    async fn prepare_launch(&self, _: &BetterPathBuf, _: &LauncherContext) -> Result<()> {
+    async fn prepare_launch(&self, _: &Path, _: &LauncherConfig) -> Result<()> {
         Ok(())
     }
 
-    async fn get_launch_jvmargs(&self, _: &LauncherContext) -> Result<Vec<OsString>> {
+    async fn get_launch_jvmargs(&self, _: &LauncherConfig) -> Result<Vec<OsString>> {
         Ok(vec![])
     }
 

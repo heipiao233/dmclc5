@@ -1,10 +1,10 @@
-use std::ffi::OsString;
+use std::{ffi::OsString, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{LauncherContext, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::{BetterPathBuf, download}};
+use crate::{LauncherConfig, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::download};
 
 use super::YggdrasilUserData;
 
@@ -15,22 +15,22 @@ pub struct MinecraftUniversalLoginAccount {
 }
 
 impl YggdrasilAccountTrait for MinecraftUniversalLoginAccount {
-    async fn prepare_launch(&self, version_launch_dir: &BetterPathBuf, _: &LauncherContext) -> Result<()> {
-        let path = version_launch_dir.clone() / "nide8auth.jar";
+    async fn prepare_launch(&self, version_launch_dir: &Path, _: &LauncherConfig) -> Result<()> {
+        let path = version_launch_dir.join("nide8auth.jar");
         if fs::metadata(&path).await.is_err() {
             download("https://login.mc-user.com:233/index/jar", &path).await?;
         }
         Ok(())
     }
 
-    async fn get_launch_jvmargs(&self, _data: &YggdrasilUserData, _: &LauncherContext) -> Result<Vec<OsString>> {
+    async fn get_launch_jvmargs(&self, _data: &YggdrasilUserData, _: &LauncherConfig) -> Result<Vec<OsString>> {
         Ok(vec![OsString::from(format!("-javaagent:./nide8auth.jar={}", self.server_id)), OsString::from("-Dnide8auth.client=true")])
     }
 }
 
 impl MinecraftUniversalLoginAccount {
     /// Login to MinecraftUniversalLogin, return tokens and profiles.
-    pub async fn auth(launcher: &LauncherContext, server_id: String, username: String, password: String) -> Result<(YggdrasilAuthInfo, Vec<Profile>)> {
+    pub async fn auth(launcher: &LauncherConfig, server_id: String, username: String, password: String) -> Result<(YggdrasilAuthInfo, Vec<Profile>)> {
         yggdrasil::auth(launcher, format!("https://auth.mc-user.com:233/{server_id}"), username, password).await
     }
 

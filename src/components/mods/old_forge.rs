@@ -1,6 +1,6 @@
 //! Implementation of [ModLoader] for Forge before 1.13.
 
-use std::fs::File;
+use std::{fs::File, path::Path};
 
 use serde::Deserialize;
 use versions::{Requirement, Versioning};
@@ -47,7 +47,7 @@ impl ModLoaderTrait for OldForgeModLoader {
         ]
     }
 
-    fn get_mods_in_file(&self, path: &crate::utils::BetterPathBuf) -> anyhow::Result<Vec<super::ModInfo>> {
+    fn get_mods_in_file(&self, path: &Path) -> anyhow::Result<Vec<super::ModInfo>> {
         let mut archive = ZipArchive::new(File::open(path)?)?;
         let info: Vec<McmodInfoItem> = serde_json::from_reader(archive.by_name("mcmod.info")?)?;
         let mut ret = vec![];

@@ -1,7 +1,7 @@
-use std::{path::Path, process::Stdio, sync::Arc};
+use std::{path::{Path, PathBuf}, process::Stdio, sync::Arc};
 
 use anyhow::Result;
-use dmclc5::{LauncherContext, minecraft::{login::{Account, AccountTrait, microsoft::MicrosoftAccount}, schemas::VersionList}, utils::DownloadAllMessage};
+use dmclc5::{LauncherConfig, minecraft::{login::{Account, AccountTrait, microsoft::MicrosoftAccount}, schemas::VersionList}, utils::DownloadAllMessage};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -33,7 +33,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
     let launcher = {
-        let mut launcher = LauncherContext::new(Path::new("./test"), "Test".to_string(), "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()).await?;
+        let mut launcher = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries"), "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()).await?;
         launcher.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
         Arc::new(launcher)
     };
