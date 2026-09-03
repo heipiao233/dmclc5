@@ -1,7 +1,7 @@
-use std::{path::{Path, PathBuf}, process::Stdio, sync::Arc};
+use std::{path::PathBuf, process::Stdio};
 
 use anyhow::Result;
-use dmclc5::{LauncherConfig, minecraft::{login::{Account::self, AccountTrait, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::DownloadAllMessage};
+use dmclc5::{LauncherConfig, minecraft::{login::{Account::self, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::DownloadAllMessage};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {

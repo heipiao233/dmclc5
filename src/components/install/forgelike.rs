@@ -8,7 +8,7 @@ use futures::{StreamExt, TryStreamExt, stream};
 use osstrtools_fix::Bytes;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
-use tokio::{fs, process::Command, sync::mpsc};
+use tokio::{process::Command, sync::mpsc};
 
 #[cfg(feature = "mod_loaders")]
 use crate::components::mods::ModLoader;
@@ -131,7 +131,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                     download_res(mc.obj.get_base().downloads.client_mappings.as_ref().unwrap(), path.as_ref()).await?;
                 }
                 let maven_dir = installer_dir.join("maven");
-                if let Ok(f) = fs::metadata(&maven_dir).await && f.is_dir() {
+                if let Ok(f) = std::fs::metadata(&maven_dir) && f.is_dir() {
                     fs_extra::dir::copy(&maven_dir, &mc.prefix.config.libraries_path, &CopyOptions::new().content_only(true))?;
                 }
                 let mut res = mc.libraries(&metadata.libraries, false);

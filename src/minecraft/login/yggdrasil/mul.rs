@@ -2,7 +2,6 @@ use std::{ffi::OsString, path::Path};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use tokio::fs;
 
 use crate::{LauncherConfig, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::download};
 
@@ -17,7 +16,7 @@ pub struct MinecraftUniversalLoginAccount {
 impl YggdrasilAccountTrait for MinecraftUniversalLoginAccount {
     async fn prepare_launch(&self, version_launch_dir: &Path, _: &LauncherConfig) -> Result<()> {
         let path = version_launch_dir.join("nide8auth.jar");
-        if fs::metadata(&path).await.is_err() {
+        if std::fs::metadata(&path).is_err() {
             download("https://login.mc-user.com:233/index/jar", &path).await?;
         }
         Ok(())

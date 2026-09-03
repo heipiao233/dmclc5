@@ -4,7 +4,7 @@ use std::{fs::File, io::Read, path::PathBuf, slice::Iter, vec};
 
 use anyhow::{Ok, Result};
 use sha1::Sha1;
-use tokio::{fs, sync::mpsc};
+use tokio::sync::mpsc;
 
 use crate::{minecraft::prefix::MinecraftPrefix, utils::{DownloadAllMessage, check_hash, check_rules, download_all, download_txt, get_os}};
 
@@ -60,8 +60,8 @@ impl VersionInfo {
         let text = res.text().await?;
         let obj: VersionJSON = serde_json::from_str(&text)?;
         let version_dir = prefix.versions_path().join(name);
-        fs::create_dir_all(version_dir.clone()).await?;
-        fs::write(version_dir.join(format!("{name}.json")), text).await?;
+        std::fs::create_dir_all(version_dir.clone())?;
+        std::fs::write(version_dir.join(format!("{name}.json")), text)?;
         let v = MinecraftInstallation::new(prefix, obj, name, Some(DMCLCExtraData {
             version: Some(self.id.clone()),
             components: vec![],

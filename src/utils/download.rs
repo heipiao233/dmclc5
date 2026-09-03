@@ -49,7 +49,7 @@ pub type DownloadAllMessage = std::result::Result<(PathBuf, FetchEvent), (PathBu
 
 async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
     if !check_hash::<Sha1>(&path, &res.sha1, res.size) {
-        let _ = fs::create_dir_all(&path.as_ref().parent().unwrap()).await;
+        let _ = std::fs::create_dir_all(&path.as_ref().parent().unwrap());
         Some((Source {
             dest: Arc::from(path.as_ref()),
             urls,
@@ -91,7 +91,7 @@ pub async fn download_all(
     let fetch_task = async move {
         while let Some((path, _, result)) = fetcher.next().await {
             if let Err(e) = result {
-                let _ = tokio::fs::remove_file(&path).await;
+                let _ = std::fs::remove_file(&path);
                 let _ = channel2.send(Err((path.to_path_buf(), e.into())));
             }
         }
@@ -144,6 +144,6 @@ pub async fn download_txt<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Res
     if let Some(p) = path.as_ref().parent() {
         fs::create_dir_all(p).await?;
     }
-    fs::write(path, &txt).await?;
+    std::fs::write(path, &txt)?;
     Ok(txt)
 }
