@@ -29,8 +29,8 @@ impl <'c> MinecraftPrefix<'c> {
     /// List the names of minecraft installations in the `root_path`.
     pub fn list_installations(&self) -> Result<Vec<String>> {
         let mut ret = Vec::new();
-        fs::create_dir_all(&self.versions_path())?;
-        for i in fs::read_dir(&self.versions_path())? {
+        fs::create_dir_all(self.versions_path())?;
+        for i in fs::read_dir(self.versions_path())? {
             let dir = i?;
             if !dir.file_type()?.is_dir() {
                 continue;

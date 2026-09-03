@@ -18,7 +18,7 @@ impl MinecraftInstallation<'_, '_> {
     /// Please use [super::version::DMCLCExtraData::with_java].
     /// Please set the work dir to [Self::get_cwd].
     pub async fn launch_args(&self, account: &Account, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<Vec<OsString>> {
-        account.prepare_launch(&self.version_launch_work_dir, &self.prefix.config).await?;
+        account.prepare_launch(&self.version_launch_work_dir, self.prefix.config).await?;
         self.complete_files(false, false, download_channel).await?;
         self.unzip_natives()?;
         let mut args = vec![];
@@ -44,7 +44,7 @@ impl MinecraftInstallation<'_, '_> {
                     }
                 }
 
-                args.extend(account.get_launch_jvmargs(&self.prefix.config).await?);
+                args.extend(account.get_launch_jvmargs(self.prefix.config).await?);
                 args.extend(self.extra_data.extra_jvm_arguments.clone().into_iter().flatten());
                 args.push(OsString::from(self.obj.get_base().main_class.clone()));
 
@@ -122,7 +122,7 @@ impl MinecraftInstallation<'_, '_> {
         self.obj.get_base().libraries.iter()
             .filter(|lib| check_rules(&lib.get_base().rules))
             .filter(|lib| !matches!(lib, Library::VanillaNatives(_)))
-            .map(|lib| (self.prefix.config.get_libraries_path(&lib.get_base().name.to_path())).into_os_string())
+            .map(|lib| (self.prefix.config.get_libraries_path(lib.get_base().name.to_path())).into_os_string())
             .chain(iter::once(self.version_root.join(format!("{}.jar", self.name)).into_os_string()))
             .collect()
     }

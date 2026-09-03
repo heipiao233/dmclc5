@@ -49,7 +49,7 @@ pub type DownloadAllMessage = std::result::Result<(PathBuf, FetchEvent), (PathBu
 
 async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
     if !check_hash::<Sha1>(&path, &res.sha1, res.size) {
-        let _ = std::fs::create_dir_all(&path.as_ref().parent().unwrap());
+        let _ = std::fs::create_dir_all(path.as_ref().parent().unwrap());
         Some((Source {
             dest: Arc::from(path.as_ref()),
             urls,
