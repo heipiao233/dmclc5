@@ -2,12 +2,11 @@
 use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}, sync::Arc, time::Duration};
 
 use anyhow::Result;
-use async_fetcher::{FetchEvent, Fetcher, Source};
-use futures_util::{io::AllowStdIo, StreamExt};
+use futures_util::{io::AllowStdIo, StreamExt, TryStreamExt};
 
 use reqwest::IntoUrl;
 use sha1::{Digest, Sha1, digest::Update};
-use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::mpsc};
+use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::{Semaphore, mpsc::{self, UnboundedReceiver}, watch}, task::JoinSet};
 use std::fs as sync_fs;
 
 use crate::minecraft::schemas::Resource;
@@ -44,68 +43,75 @@ pub async fn download_res(res: &Resource, path: &Path) -> Result<()> {
     download(res.url.clone(), path).await
 }
 
-/// Messages for download_all in channel.
-pub type DownloadAllMessage = std::result::Result<(PathBuf, FetchEvent), (PathBuf, anyhow::Error)>;
+/// Events for single file.
+#[derive(Debug)]
+pub enum DownloadEvent {
+    /// Download has been started
+    Start,
+    /// File size known
+    ContentLength(u64),
+    /// Download progress
+    Progress(u64),
+    /// File download retrying
+    Retry(anyhow::Error),
+    /// Download finished
+    Finish(anyhow::Result<()>),
+}
 
-async fn check_and_download(path: impl AsRef<Path>, res: &Resource, urls: Arc<[Box<str>]>) -> Option<(Source, Arc<()>)> {
-    if !check_hash::<Sha1>(&path, &res.sha1, res.size) {
-        let _ = std::fs::create_dir_all(path.as_ref().parent().unwrap());
-        Some((Source {
-            dest: Arc::from(path.as_ref()),
-            urls,
-            part: None
-        }, Arc::new(())))
-    } else {
-        None
+/// Messages for download_all in channel.
+pub type DownloadAllMessage = (String, DownloadEvent);
+
+async fn check_and_download(path: impl AsRef<Path>, res: Resource, name: String, retries: usize, tx: mpsc::Sender<DownloadAllMessage>) {
+    if check_hash::<Sha1>(&path, &res.sha1, res.size) {
+        return;
+    }
+    let _ = std::fs::create_dir_all(path.as_ref().parent().unwrap());
+    tx.send((name.clone(), DownloadEvent::Start));
+    for time in 0..retries {
+        match download_prog(res.url.clone(), &path, |prog| {
+            tx.send((name.clone(), prog));
+        }).await {
+            Ok(_) => {
+                tx.send((name.clone(), DownloadEvent::Finish(Ok(())))).await;
+                return;
+            },
+            Err(e) if time != retries - 1 => {
+                tx.send((name.clone(), DownloadEvent::Retry(e))).await;
+            }
+            Err(e) => {
+                tx.send((name.clone(), DownloadEvent::Finish(Err(e)))).await;
+            }
+        }
     }
 }
 
 /// Download [Resource]s to paths.
 pub async fn download_all(
-    resources: Vec<(Resource, PathBuf)>, channel: mpsc::UnboundedSender<DownloadAllMessage>,
-    threads_per_file: u16, parallel_files: usize, retries: usize,
+    files: Vec<(Resource, PathBuf, String)>,
+    tx: mpsc::Sender<DownloadAllMessage>,
+    parallel_files: usize, retries: usize,
     mirror: Option<String>
-) -> Result<()> {
-    let sources = futures_util::stream::iter(resources)
-        .map(move |(res, path)| {
-            let mirrored = mirror.clone().map(|mirror| mirrored(&res.url, mirror));
-            (res, path, mirrored)
-        })
-        .filter_map(async |(res, path, mirrored)| {
-            if let Some(mirrored) = mirrored {
-                let url = res.url.clone();
-                check_and_download(path, &res, Arc::new([Box::from(url.as_str()), Box::from(mirrored.as_str())])).await
-            } else {
-                check_and_download(path, &res, Arc::new([Box::from(res.url.as_str())])).await
-            }
+) {
+    let mut set = JoinSet::new();
+    let sema = Arc::new(Semaphore::new(parallel_files));
+    for file in files {
+        let sema = sema.clone();
+        let tx = tx.clone();
+        let resource = Resource {
+            url: match &mirror {
+                Some(mirror) => mirrored(&file.0.url, mirror),
+                None => file.0.url
+            },
+            ..file.0
+        };
+        set.spawn(async move {
+            sema.acquire().await;
+            check_and_download(file.1, resource, file.2, retries, tx);
         });
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    let mut fetcher = Fetcher::default()
-        .events(tx)
-        .retries(retries as u16)
-        .timeout(Duration::from_secs(15))
-        .connections_per_file(threads_per_file)
-        .build()
-        .stream_from(sources, parallel_files * (threads_per_file as usize));
-    let channel2 = channel.clone();
-    let fetch_task = async move {
-        while let Some((path, _, result)) = fetcher.next().await {
-            if let Err(e) = result {
-                let _ = std::fs::remove_file(&path);
-                let _ = channel2.send(Err((path.to_path_buf(), e.into())));
-            }
-        }
-    };
-    let send_task = async move {
-        while let Some((path, _, event)) = rx.recv().await {
-            let _ = channel.send(Ok((path.to_path_buf(), event)));
-        }
-    };
-    tokio::join!(fetch_task, send_task);
-    Ok(())
+    }
 }
 
-fn mirrored(url: &str, mirror: String) -> String {
+fn mirrored(url: &str, mirror: &str) -> String {
     url
         .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
         .replace("libraries.minecraft.net", &format!("{mirror}/maven"))
@@ -117,25 +123,39 @@ fn mirrored(url: &str, mirror: String) -> String {
 
 /// Read the `url` into the `writer`.
 pub async fn download_to_writer<URL: IntoUrl, W: AsyncWrite + std::marker::Unpin>(url: URL, writer: &mut W) -> Result<()> {
-    let mut stream = reqwest::get(url).await?.bytes_stream();
+    download_to_writer_prog(url, writer, |_|()).await
+}
 
-    while let Some(chunk) = stream.next().await {
-        writer.write_all(&chunk?).await?;
-        writer.flush().await?
-    }
+/// Read the `url` into the `writer`.
+pub async fn download<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Result<()> {
+    download_prog(url, path, |_|()).await
+}
+
+/// Read the `url` into the `writer`.
+pub async fn download_to_writer_prog<URL: IntoUrl, W: AsyncWrite + std::marker::Unpin>(url: URL, writer: &mut W, cb: impl Fn(DownloadEvent) -> ()) -> Result<()> {
+    let resp = reqwest::get(url).await?;
+    resp.content_length().map(|l| cb(DownloadEvent::ContentLength(l)));
+
+    let (writer, _) = resp.bytes_stream()
+        .try_fold((writer, 0u64), async |(writer, prog), byte| {
+            writer.write(&byte).await;
+            let prog = prog + byte.len() as u64;
+            cb(DownloadEvent::Progress(prog));
+            Ok((writer, prog))
+        }).await?;
 
     writer.flush().await?;
     Ok(())
 }
 
 /// Download the `url` into the `path`.
-pub async fn download<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Result<()> {
+pub async fn download_prog<URL: IntoUrl>(url: URL, path: impl AsRef<Path>, cb: impl Fn(DownloadEvent) -> ()) -> Result<()> {
     if let Some(p) = path.as_ref().parent() {
         fs::create_dir_all(p).await?;
     }
     let mut file = File::create(path).await?;
 
-    download_to_writer(url, &mut file).await
+    download_to_writer_prog(url, &mut file, cb).await
 }
 
 /// Download the `url` into the `path`, and return the content.

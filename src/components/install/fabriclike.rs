@@ -105,7 +105,7 @@ impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstall
         Ok(res)
     }
 
-    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
+    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::Sender<DownloadAllMessage>) -> Result<()> {
         let mcversion = mc.extra_data.version.as_ref().unwrap();
         let version_info: VersionJSON = reqwest::get(format!("{}/versions/loader/{}/{}/profile/json", T::META_URL,
             form_urlencoded::byte_serialize(mcversion.as_bytes()).collect::<String>(),
@@ -115,9 +115,9 @@ impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstall
         serde_json::to_writer(&std::fs::File::create(mc.version_root.join(mc.name.to_string() + ".json"))?, &mc.obj)?;
         let res = mc.libraries(&version_info.get_base().libraries, true);
         download_all(res, download_channel,
-            mc.config.download_threads_per_file, mc.config.download_parallel_files, mc.config.download_retries,
+            mc.config.download_parallel_files, mc.config.download_retries,
             mc.config.bmclapi_mirror.clone()
-        ).await?;
+        ).await;
         Ok(())
     }
 

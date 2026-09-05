@@ -112,7 +112,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
             .filter(|v| T::match_version(&v, &mc.extra_data.version.as_ref().unwrap())).collect())
     }
 
-    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
+    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::Sender<DownloadAllMessage>) -> Result<()> {
         let mcver = mc.extra_data.version.as_ref().unwrap().clone();
         let mut tmpfile = tokio::fs::File::from_std(tempfile::tempfile()?);
         let url = format!("{}/{1}/{version}/{}-{version}-installer.jar", T::MAVEN_GROUP_URL, T::get_archive_base_name(&mcver));
@@ -143,7 +143,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                     res, download_channel, mc.config.download_threads_per_file,
                     mc.config.download_parallel_files, mc.config.download_retries,
                     mc.config.bmclapi_mirror.clone()
-                ).await?;
+                ).await;
 
                 stream::iter(&metadata.processors)
                     .filter(|p| futures::future::ready(!p.args.contains(&"DOWNLOAD_MOJMAPS".to_string())))

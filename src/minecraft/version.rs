@@ -60,7 +60,8 @@ pub struct MinecraftInstallation<'c> {
     /// Some extra datas.
     pub extra_data: DMCLCExtraData,
     pub(crate) config: &'c LauncherConfig,
-    pub(crate) name: String,
+    /// Name of this installation.
+    pub name: String,
     pub(crate) version_launch_work_dir: PathBuf,
     pub(crate) version_root: PathBuf
 }

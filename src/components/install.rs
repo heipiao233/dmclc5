@@ -26,7 +26,7 @@ pub trait ComponentInstallerTrait {
     /// Install for a [MinecraftInstallation].
     /// Clients should not call this directly, as it doesn't append [crate::minecraft::version::DMCLCExtraData::components]
     /// Insteadly, clients should call [MinecraftInstallation::install_component].
-    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()>;
+    async fn install(&self, mc: &mut MinecraftInstallation<'_>, version: &str, download_channel: mpsc::Sender<DownloadAllMessage>) -> Result<()>;
 
     /// Find this component in a [MinecraftInstallation]. Returns the version of the component.
     fn find_in_version(&self, v: &VersionJSON) -> Option<String>;
@@ -49,14 +49,20 @@ pub enum ComponentInstaller {
     Quilt(FabricLikeInstaller<QuiltInstaller>)
 }
 
+impl ComponentInstaller {
+    pub fn as_str(&self) -> &str {
+        match self {
+            ComponentInstaller::Fabric(_) => "fabric",
+            ComponentInstaller::Quilt(_) => "quilt",
+            ComponentInstaller::Forge(_) => "forge",
+            ComponentInstaller::NeoForge(_) => "neoforge",
+        }
+    }
+}
+
 impl ToString for ComponentInstaller {
     fn to_string(&self) -> String {
-        match self {
-            ComponentInstaller::Fabric(_) => "fabric".to_string(),
-            ComponentInstaller::Quilt(_) => "quilt".to_string(),
-            ComponentInstaller::Forge(_) => "forge".to_string(),
-            ComponentInstaller::NeoForge(_) => "neoforge".to_string(),
-        }
+        self.as_str().to_string()
     }
 }
 
@@ -75,7 +81,7 @@ impl FromStr for ComponentInstaller {
 
 impl MinecraftInstallation<'_> {
     /// Install a component.
-    pub async fn install_component(&mut self, component: ComponentInstaller, version: &str, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<()> {
+    pub async fn install_component(&mut self, component: ComponentInstaller, version: &str, download_channel: mpsc::Sender<DownloadAllMessage>) -> Result<()> {
         if let None = self.extra_data.version {
             return Err(anyhow!(t!("loaders.minecraft_version_unknown")));
         }

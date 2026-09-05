@@ -18,7 +18,7 @@ use versions::{Requirement, Versioning};
 use crate::components::mods::VersionBound;
 use crate::minecraft::schemas::{Arguments, EnvRule, OSType, VersionJSON};
 
-pub use self::download::{download, download_res, download_txt, download_all, check_hash, download_to_writer, DownloadAllMessage};
+pub use self::download::{download, download_res, download_txt, download_all, check_hash, download_to_writer, DownloadAllMessage, DownloadEvent};
 
 #[cfg(not(target_os="windows"))]
 /// The path delimiter.
@@ -61,7 +61,7 @@ pub fn get_bits() -> String {
 /// Check one [EnvRule].
 pub fn check_rule(rule: &EnvRule) -> bool {
     if let Some(os) = &rule.os && let Some(os) = &os.name {
-        return get_os() == *os;
+        return os == &OSType::Universal || get_os() == *os;
     }
 
     rule.features.is_none() // No features support currently

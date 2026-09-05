@@ -28,7 +28,6 @@ impl MinecraftPrefix {
         fs::create_dir_all(self.versions_path())?;
         Ok(fs::read_dir(self.versions_path())?
             .filter_map(|dir| dir.ok())
-            .filter(|dir| dir.file_type().is_ok_and(|typ| typ.is_dir()))
             .map(|dir| dir.file_name().to_string_lossy().to_string())
             .filter_map(|dir| self.get_installation(&dir, config))
             .collect()
@@ -42,8 +41,8 @@ impl MinecraftPrefix {
         if meta.is_err() || !meta.unwrap().is_dir() {
             return None;
         }
-        let json = fs::read(version_dir.join(name.to_string() + ".json")).ok()?;
-        let json = serde_json::from_slice(&json).ok()?;
+        let json = fs::File::open(version_dir.join(name.to_string() + ".json")).ok()?;
+        let json = serde_json::from_reader(&json).ok()?;
         let json: VersionJSON = self.resolve_inherits_from(json);
         Some(MinecraftInstallation::new(self, config, json, name, None))
     }

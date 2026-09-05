@@ -17,7 +17,7 @@ impl MinecraftInstallation<'_> {
     /// Please run [super::version::DMCLCExtraData::before_command] before launching.
     /// Please use [super::version::DMCLCExtraData::with_java].
     /// Please set the work dir to [Self::get_cwd].
-    pub async fn launch_args(&self, account: &Account, download_channel: mpsc::UnboundedSender<DownloadAllMessage>) -> Result<Vec<OsString>> {
+    pub async fn launch_args(&self, account: &Account, download_channel: mpsc::Sender<DownloadAllMessage>) -> Result<Vec<OsString>> {
         account.prepare_launch(&self.version_launch_work_dir, self.config).await?;
         self.complete_files(false, false, download_channel).await?;
         self.unzip_natives()?;

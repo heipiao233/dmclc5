@@ -215,7 +215,8 @@ pub enum OSType {
     Linux,
     Windows,
     #[serde(rename = "osx")]
-    OSX
+    OSX,
+    Universal
     // Other OSes are not supported by Mojang.
 }
 
