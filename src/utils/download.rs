@@ -1,12 +1,12 @@
 /// Things about downloading.
-use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}, sync::Arc, time::Duration};
+use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}, sync::Arc};
 
 use anyhow::Result;
-use futures_util::{io::AllowStdIo, StreamExt, TryStreamExt};
+use futures_util::{io::AllowStdIo, TryStreamExt};
 
 use reqwest::IntoUrl;
 use sha1::{Digest, Sha1, digest::Update};
-use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::{Semaphore, mpsc::{self, UnboundedReceiver}, watch}, task::JoinSet};
+use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::{Semaphore, mpsc::{self}}, task::JoinSet};
 use std::fs as sync_fs;
 
 use crate::minecraft::schemas::Resource;
@@ -66,20 +66,20 @@ async fn check_and_download(path: impl AsRef<Path>, res: Resource, name: String,
         return;
     }
     let _ = std::fs::create_dir_all(path.as_ref().parent().unwrap());
-    tx.send((name.clone(), DownloadEvent::Start));
+    let _ = tx.send((name.clone(), DownloadEvent::Start)).await;
     for time in 0..retries {
         match download_prog(res.url.clone(), &path, |prog| {
-            tx.send((name.clone(), prog));
+            let _ = tx.blocking_send((name.clone(), prog));
         }).await {
             Ok(_) => {
-                tx.send((name.clone(), DownloadEvent::Finish(Ok(())))).await;
+                let _ = tx.send((name.clone(), DownloadEvent::Finish(Ok(())))).await;
                 return;
             },
             Err(e) if time != retries - 1 => {
-                tx.send((name.clone(), DownloadEvent::Retry(e))).await;
+                let _ = tx.send((name.clone(), DownloadEvent::Retry(e))).await;
             }
             Err(e) => {
-                tx.send((name.clone(), DownloadEvent::Finish(Err(e)))).await;
+                let _ = tx.send((name.clone(), DownloadEvent::Finish(Err(e)))).await;
             }
         }
     }
@@ -105,8 +105,8 @@ pub async fn download_all(
             ..file.0
         };
         set.spawn(async move {
-            sema.acquire().await;
-            check_and_download(file.1, resource, file.2, retries, tx);
+            let _ = sema.acquire().await;
+            check_and_download(file.1, resource, file.2, retries, tx).await;
         });
     }
 }
@@ -137,8 +137,9 @@ pub async fn download_to_writer_prog<URL: IntoUrl, W: AsyncWrite + std::marker::
     resp.content_length().map(|l| cb(DownloadEvent::ContentLength(l)));
 
     let (writer, _) = resp.bytes_stream()
+        .map_err(|err|anyhow::Error::from(err))
         .try_fold((writer, 0u64), async |(writer, prog), byte| {
-            writer.write(&byte).await;
+            writer.write(&byte).await?;
             let prog = prog + byte.len() as u64;
             cb(DownloadEvent::Progress(prog));
             Ok((writer, prog))
