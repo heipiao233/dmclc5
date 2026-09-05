@@ -1,31 +1,27 @@
 use std::{path::PathBuf, str::FromStr};
 
-use dmclc5::{LauncherConfig, components::install::fabriclike::FABRIC_INSTALLER, minecraft::{schemas::VersionList, prefix::MinecraftPrefix}, utils::{DownloadAllMessage, download}};
+use dmclc5::{LauncherConfig, components::install::fabriclike::FABRIC_INSTALLER, minecraft::{prefix::MinecraftPrefix, schemas::VersionList}, utils::{DownloadAllMessage, DownloadEvent, download}};
 use tokio::sync::mpsc;
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
-        Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
-            println!("{} start: {len}", c.display());
+        (c, DownloadEvent::ContentLength(len)) => {
+            println!("{} start: {len}", c);
         },
-        Ok((c, async_fetcher::FetchEvent::Fetched)) => {
-            println!("{} end ({count})", c.display());
+        (c, DownloadEvent::Finish(_)) => {
+            println!("{} end ({count})", c);
             *count -= 1;
         },
-        Ok((_, async_fetcher::FetchEvent::Fetching)) => {
+        (_, DownloadEvent::Start) => {
             *count += 1;
             println!("{count}");
         },
-        Ok((_c, async_fetcher::FetchEvent::Progress(_prog))) => {
+        (_c, DownloadEvent::Progress(_prog)) => {
             // println!("{} fetching: {prog}", c.0.display());
         },
-        Ok((c, async_fetcher::FetchEvent::Retrying))=> {
-            println!("{} retrying", c.display());
+        (c, DownloadEvent::Retry(_)) => {
+            println!("{} retrying", c);
         },
-        Err((c, e)) => {
-            println!("{} error {e} ({count})", c.display());
-            *count -= 1;
-        }
     }
 }
 
@@ -33,7 +29,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 async fn main() {
     let config: LauncherConfig = LauncherConfig::new("dmclc example mod_loader".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")).unwrap();
     let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test")).unwrap();
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::channel(1000);
     let handler = async move {
         let mut count = 0;
         while let Some(next) = rx.recv().await {
@@ -43,7 +39,7 @@ async fn main() {
     let mc = VersionList::get_list().await.unwrap();
     let mc = mc.find_by_id("1.20.4").unwrap().install(&prefix, &config, "1.20.4-fabric", tx);
     let mut mc = tokio::join!(handler, mc).1.unwrap();
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::channel(1000);
     let handler = async move {
         let mut count = 0;
         while let Some(next) = rx.recv().await {

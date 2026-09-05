@@ -50,6 +50,7 @@ pub enum ComponentInstaller {
 }
 
 impl ComponentInstaller {
+    /// Get the name of the installer
     pub fn as_str(&self) -> &str {
         match self {
             ComponentInstaller::Fabric(_) => "fabric",

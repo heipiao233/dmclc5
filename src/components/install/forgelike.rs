@@ -140,7 +140,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                 result = merge_version_json(target, &source)?;
                 res.extend(mc.libraries(&source.get_base().libraries, false));
                 download_all(
-                    res, download_channel, mc.config.download_threads_per_file,
+                    res, download_channel,
                     mc.config.download_parallel_files, mc.config.download_retries,
                     mc.config.bmclapi_mirror.clone()
                 ).await;

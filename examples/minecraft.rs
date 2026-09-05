@@ -1,32 +1,28 @@
 use std::{path::PathBuf, process::Stdio};
 
 use anyhow::Result;
-use dmclc5::{LauncherConfig, minecraft::{login::{Account::self, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::DownloadAllMessage};
+use dmclc5::{LauncherConfig, minecraft::{login::{Account::self, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::{DownloadAllMessage, DownloadEvent}};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
     match msg {
-        Ok((c, async_fetcher::FetchEvent::ContentLength(len))) => {
-            println!("{} start: {len}", c.display());
+        (c, DownloadEvent::ContentLength(len)) => {
+            println!("{} start: {len}", c);
         },
-        Ok((c, async_fetcher::FetchEvent::Fetched)) => {
-            println!("{} end ({count})", c.display());
+        (c, DownloadEvent::Finish(_)) => {
+            println!("{} end ({count})", c);
             *count -= 1;
         },
-        Ok((_, async_fetcher::FetchEvent::Fetching)) => {
+        (_, DownloadEvent::Start) => {
             *count += 1;
             println!("{count}");
         },
-        Ok((_c, async_fetcher::FetchEvent::Progress(_prog))) => {
+        (_c, DownloadEvent::Progress(_prog)) => {
             // println!("{} fetching: {prog}", c.0.display());
         },
-        Ok((c, async_fetcher::FetchEvent::Retrying))=> {
-            println!("{} retrying", c.display());
+        (c, DownloadEvent::Retry(_)) => {
+            println!("{} retrying", c);
         },
-        Err((c, e)) => {
-            println!("{} error {e} ({count})", c.display());
-            *count -= 1;
-        }
     }
 }
 
@@ -35,7 +31,7 @@ async fn real_main() -> Result<()> {
     let mut config = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")/*, "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()*/)?;
     config.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
     let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test")).unwrap();
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::channel(1000);
     let message_handler = async move {
         let mut count = 0;
         while let Some(next) = rx.recv().await {
@@ -63,7 +59,7 @@ async fn real_main() -> Result<()> {
             .current_dir(mc.get_cwd())
             .spawn()?.wait().await?;
     }
-    let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, mut rx) = mpsc::channel(1000);
     let msg_handler = async move {
         let mut count = 0;
         while let Some(next) = rx.recv().await {
