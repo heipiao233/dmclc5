@@ -13,6 +13,7 @@ use crate::{LauncherConfig, minecraft::{login::{Account, AccountTrait}}};
 /// An offline account, useful if no Internet.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct OfflineAccount {
+    /// The game username
     pub name: String,
     uuid: Uuid
 }

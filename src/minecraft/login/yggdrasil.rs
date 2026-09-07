@@ -31,7 +31,9 @@ pub struct YggdrasilUserData {
 /// A Yggdrasil account profile, with dedicated game nickname, skin and cape.
 #[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Profile {
+    /// The UUID of this profile
     pub id: Uuid,
+    /// The game nickname
     pub name: String
 }
 
