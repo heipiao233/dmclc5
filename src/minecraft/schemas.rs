@@ -32,7 +32,8 @@ pub struct VersionList {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Resource {
     pub url: String,
-    pub sha1: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha1: Option<String>,
     pub size: usize
 }
 

@@ -153,7 +153,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                             .map(|(name, hash)| (transform_arguments(name, &installer_dir, &mc, &metadata), transform_arguments(hash, &installer_dir, &mc, &metadata)))
                             .all(async |(name, hash)| check_hash::<Sha1>(
                                 &PathBuf::from(name),
-                                &hash.into_string().unwrap(),
+                                Some(&hash.into_string().unwrap()),
                                 0
                             )).await
                     })

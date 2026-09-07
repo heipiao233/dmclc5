@@ -11,12 +11,15 @@ use crate::{LauncherConfig, minecraft::{login::{Account, AccountTrait}}};
 
 
 /// An offline account, useful if no Internet.
-#[derive(Serialize, Deserialize)]
-pub struct OfflineAccount(pub String, Uuid);
+#[derive(Serialize, Deserialize, Clone)]
+pub struct OfflineAccount {
+    pub name: String,
+    uuid: Uuid
+}
 
 impl Display for OfflineAccount {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.0, t!("accounts.offline.name"))
+        write!(f, "{} ({})", self.name, t!("accounts.offline.name"))
     }
 }
 
@@ -24,12 +27,12 @@ impl OfflineAccount {
     /// Create a [OfflineAccount] from username
     pub fn new(name: String) -> Self {
         let uuid = Builder::from_md5_bytes(md5::compute(&name).0).into_uuid();
-        Self(name, uuid)
+        Self { name, uuid }
     }
 
     /// Create a [OfflineAccount] from username and uuid
-    pub fn new_with_uuid(name: String, uuid: Uuid) -> Self {
-        Self(name, uuid)
+    pub const fn new_with_uuid(name: String, uuid: Uuid) -> Self {
+        Self { name, uuid }
     }
 }
 
@@ -38,8 +41,8 @@ impl AccountTrait for OfflineAccount {
         Ok(self.into())
     }
 
-    fn get_uuid(&self) -> Uuid {
-        self.1
+    fn get_uuid(&self) -> &Uuid {
+        &self.uuid
     }
 
     async fn prepare_launch(&self, _: &Path, _: &LauncherConfig) -> Result<()> {
@@ -51,7 +54,7 @@ impl AccountTrait for OfflineAccount {
     }
 
     fn replace_launch_game_arg(&self, arg: &str) -> String {
-        arg.replace("${auth_player_name}", &self.0)
+        arg.replace("${auth_player_name}", &self.name)
             .replace("${user_type}", "offline")
             .replace("${user_properties}", "{}")
     }

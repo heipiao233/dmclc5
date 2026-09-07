@@ -33,8 +33,6 @@ pub struct LauncherConfig {
     // pub account_types: HashMap<String, Box<dyn AccountConstructor>>,
     /// Max download retry times.
     pub download_retries: usize,
-    /// Max download threads per file.
-    pub download_threads_per_file: u16,
     /// Max parallel downloading files.
     pub download_parallel_files: usize,
     /// BMCLAPI mirror.
@@ -61,7 +59,6 @@ impl LauncherConfig {
                 .set_device_authorization_url(DeviceAuthorizationUrl::new("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode".to_string())?)
                 .set_token_uri(TokenUrl::new("https://login.microsoftonline.com/consumers/oauth2/v2.0/token".to_string())?),
             download_retries: 5,
-            download_threads_per_file: 8,
             download_parallel_files: 8,
             bmclapi_mirror: None
         };

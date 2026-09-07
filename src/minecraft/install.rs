@@ -99,7 +99,7 @@ impl MinecraftInstallation<'_> {
     async fn assets(&self) -> Result<Vec<(Resource, PathBuf, String)>> {
         let assets = &self.obj.get_base().asset_index;
         let asset_path = self.config.get_assets_path(format!("indexes/{}.json", assets.res.id));
-        let index = if !check_hash::<Sha1>(&asset_path, &assets.res.res.sha1, assets.res.res.size) {
+        let index = if !check_hash::<Sha1>(&asset_path, assets.res.res.sha1.as_deref(), assets.res.res.size) {
             download_txt(&assets.res.res.url, asset_path).await?
         } else {
             let mut str = String::new();
@@ -107,13 +107,13 @@ impl MinecraftInstallation<'_> {
             str
         };
         let index: AssetsIndex = serde_json::from_str(&index)?;
-        Ok(index.objects.values()
-            .map(|asset| (format!("{}/{}", &asset.hash[0..=1], asset.hash), asset))
-            .map(|(path, asset)| (Resource {
+        Ok(index.objects.iter()
+            .map(|(name, asset)| (name, format!("{}/{}", &asset.hash[0..=1], asset.hash), asset))
+            .map(|(name, path, asset)| (Resource {
                 url: format!("https://resources.download.minecraft.net/{path}"),
-                sha1: asset.hash.clone(),
+                sha1: Some(asset.hash.clone()),
                 size: asset.size
-            }, self.config.get_assets_path(format!("objects/{path}")), path))
+            }, self.config.get_assets_path(format!("objects/{path}")), name.clone()))
             .collect())
     }
 
@@ -125,14 +125,14 @@ impl MinecraftInstallation<'_> {
                     Library::FabricWithHash(l) => {
                         Some((Resource {
                             url: format!("{}/{}", l.url, l.base.name.to_path()),
-                            sha1: l.sha1.clone(),
+                            sha1: Some(l.sha1.clone()),
                             size: l.size
                         }, self.config.get_libraries_path(l.base.name.to_path()), l.base.name.to_string()))
                     },
                     Library::FabricOldForgeAndLiteLoader(l) if l.clientreq => {
                         Some((Resource {
                             url: format!("{}/{}", l.url, l.base.name.to_path()),
-                            sha1: always_download_nohash.to_string(),
+                            sha1: always_download_nohash.then_some("ALWAYS_FAIL".to_string()),
                             size: 0
                         }, self.config.get_libraries_path(l.base.name.to_path()), l.base.name.to_string()))
                     }
@@ -146,7 +146,7 @@ impl MinecraftInstallation<'_> {
                     Library::BaseOnly(l) => {
                         Some((Resource {
                             url: format!("https://libraries.minecraft.net/{}", l.name.to_path()),
-                            sha1: always_download_nohash.to_string(),
+                            sha1: always_download_nohash.then_some("ALWAYS_FAIL".to_string()),
                             size: 0
                         }, self.config.get_libraries_path(l.name.to_path()), l.name.to_string()))
                     }

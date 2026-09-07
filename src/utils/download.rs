@@ -15,7 +15,7 @@ use crate::minecraft::schemas::Resource;
 ///
 /// # Arguments
 /// * `T` - A hash algorithm like [Sha1] or [Sha256](sha2::Sha256)
-pub fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str, size: usize) -> bool {
+pub fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: Option<&str>, size: usize) -> bool {
     let meta = sync_fs::metadata(&path);
     if meta.is_err() {
         return false;
@@ -24,12 +24,16 @@ pub fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str, size
     if size != 0 && meta.size() as usize != size {
         return false;
     }
+    if digest.is_none() {
+        return true;
+    }
     if let Ok(mut f) = sync_fs::File::open(path) {
         let mut hash = AllowStdIo::new(digest_io::IoWrapper(T::new()));
         if std::io::copy(&mut f, &mut hash).is_err() {
             return false;
         }
-        hex::encode(hash.into_inner().0.finalize()) == digest
+        let res = hex::encode(hash.into_inner().0.finalize());
+        &res == digest.unwrap()
     } else {
         false
     }
@@ -37,7 +41,7 @@ pub fn check_hash<T: Digest + Update>(path: impl AsRef<Path>, digest: &str, size
 
 /// Download a [Resource] to the `path`.
 pub async fn download_res(res: &Resource, path: &Path) -> Result<()> {
-    if check_hash::<Sha1>(path, &res.sha1, res.size) {
+    if check_hash::<Sha1>(path, res.sha1.as_deref(), res.size) {
         return Ok(());
     }
     download(res.url.clone(), path).await
@@ -50,8 +54,8 @@ pub enum DownloadEvent {
     Start,
     /// File size known
     ContentLength(u64),
-    /// Download progress
-    Progress(u64),
+    /// New chunk arrived with size
+    Chunk(u64),
     /// File download retrying
     Retry(anyhow::Error),
     /// Download finished
@@ -62,14 +66,19 @@ pub enum DownloadEvent {
 pub type DownloadAllMessage = (String, DownloadEvent);
 
 async fn check_and_download(path: impl AsRef<Path>, res: Resource, name: String, retries: usize, tx: mpsc::Sender<DownloadAllMessage>) {
-    if check_hash::<Sha1>(&path, &res.sha1, res.size) {
+    if check_hash::<Sha1>(&path, res.sha1.as_deref(), res.size) {
         return;
     }
     let _ = std::fs::create_dir_all(path.as_ref().parent().unwrap());
     let _ = tx.send((name.clone(), DownloadEvent::Start)).await;
     for time in 0..retries {
-        match download_prog(res.url.clone(), &path, |prog| {
-            let _ = tx.blocking_send((name.clone(), prog));
+        match download_prog(res.url.clone(), &path, {
+            let name = name.clone();
+            let tx = tx.clone();
+            async move |prog| {
+                let name = name.clone();
+                let _ = tx.send((name, prog)).await;
+            }
         }).await {
             Ok(_) => {
                 let _ = tx.send((name.clone(), DownloadEvent::Finish(Ok(())))).await;
@@ -105,44 +114,48 @@ pub async fn download_all(
             ..file.0
         };
         set.spawn(async move {
-            let _ = sema.acquire().await;
+            let res = sema.acquire().await;
             check_and_download(file.1, resource, file.2, retries, tx).await;
+            drop(res);
         });
     }
+    set.join_all().await;
 }
 
 fn mirrored(url: &str, mirror: &str) -> String {
     url
         .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
+        .replace("launchermeta.mojang.com", &mirror)
+        .replace("launcher.mojang.com", &mirror)
         .replace("libraries.minecraft.net", &format!("{mirror}/maven"))
         .replace("files.minecraftforge.net", &mirror)
-        .replace("maven.fabricmc.net", &mirror)
+        .replace("maven.fabricmc.net", &format!("{mirror}/maven"))
         .replace("maven.neoforged.net/releases/net/neoforged/neoforge", &format!("{mirror}/maven/net/neoforged/neoforge"))
-        .replace("resources.download.minecraft.net", &format!("{mirror}/assets"))
 }
 
 /// Read the `url` into the `writer`.
 pub async fn download_to_writer<URL: IntoUrl, W: AsyncWrite + std::marker::Unpin>(url: URL, writer: &mut W) -> Result<()> {
-    download_to_writer_prog(url, writer, |_|()).await
+    download_to_writer_prog(url, writer, async |_|()).await
 }
 
 /// Read the `url` into the `writer`.
 pub async fn download<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Result<()> {
-    download_prog(url, path, |_|()).await
+    download_prog(url, path, async |_|()).await
 }
 
 /// Read the `url` into the `writer`.
-pub async fn download_to_writer_prog<URL: IntoUrl, W: AsyncWrite + std::marker::Unpin>(url: URL, writer: &mut W, cb: impl Fn(DownloadEvent) -> ()) -> Result<()> {
+pub async fn download_to_writer_prog<URL: IntoUrl, W: AsyncWrite + std::marker::Unpin>(url: URL, writer: &mut W, cb: impl AsyncFn(DownloadEvent) -> () + Send) -> Result<()> {
     let resp = reqwest::get(url).await?;
-    resp.content_length().map(|l| cb(DownloadEvent::ContentLength(l)));
+    if let Some(l) = resp.content_length() {
+        cb(DownloadEvent::ContentLength(l)).await;
+    }
 
-    let (writer, _) = resp.bytes_stream()
+    let writer = resp.bytes_stream()
         .map_err(|err|anyhow::Error::from(err))
-        .try_fold((writer, 0u64), async |(writer, prog), byte| {
-            writer.write(&byte).await?;
-            let prog = prog + byte.len() as u64;
-            cb(DownloadEvent::Progress(prog));
-            Ok((writer, prog))
+        .try_fold(writer, async |writer, bytes| {
+            writer.write(&bytes).await?;
+            cb(DownloadEvent::Chunk(bytes.len() as u64)).await;
+            Ok(writer)
         }).await?;
 
     writer.flush().await?;
@@ -150,7 +163,7 @@ pub async fn download_to_writer_prog<URL: IntoUrl, W: AsyncWrite + std::marker::
 }
 
 /// Download the `url` into the `path`.
-pub async fn download_prog<URL: IntoUrl>(url: URL, path: impl AsRef<Path>, cb: impl Fn(DownloadEvent) -> ()) -> Result<()> {
+pub async fn download_prog<URL: IntoUrl>(url: URL, path: impl AsRef<Path>, cb: impl AsyncFn(DownloadEvent) -> () + Send) -> Result<()> {
     if let Some(p) = path.as_ref().parent() {
         fs::create_dir_all(p).await?;
     }

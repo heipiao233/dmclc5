@@ -8,7 +8,7 @@ use crate::{LauncherConfig, minecraft::{login::yggdrasil::{self, Profile, Yggdra
 use super::YggdrasilUserData;
 
 /// An account with nide8.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MinecraftUniversalLoginAccount {
     server_id: String
 }
@@ -35,8 +35,11 @@ impl MinecraftUniversalLoginAccount {
 
     /// Create a [MinecraftUniversalLoginAccount] with authenicated tokens and selected profile from [Self::auth]
     pub fn new(auth_info: YggdrasilAuthInfo, profile: Profile, server_id: String) -> YggdrasilAccount<Self> {
-        YggdrasilAccount(YggdrasilUserData::new(auth_info, profile), Self {
-            server_id
-        })
+        YggdrasilAccount {
+            data: YggdrasilUserData::new(auth_info, profile),
+            extra: Self {
+                server_id
+            }
+        }
     }
 }

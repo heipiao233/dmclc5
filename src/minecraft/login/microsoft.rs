@@ -9,9 +9,10 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::{LauncherConfig, minecraft::login::{Account, AccountTrait}};
+pub use oauth2::StandardDeviceAuthorizationResponse;
 
 /// An official account.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct MicrosoftAccount {
     #[serde(skip)]
     refresh_token: Option<String>,
@@ -22,8 +23,8 @@ pub struct MicrosoftAccount {
 
 impl MicrosoftAccount {
     /// Begin with a creating of a [MicrosoftAccount]
-    /// Show the [oauth2::StandardDeviceAuthorizationResponse] to your user.
-    pub async fn start_auth(launcher: &LauncherConfig) -> Result<oauth2::StandardDeviceAuthorizationResponse> {
+    /// Show the [StandardDeviceAuthorizationResponse] to your user.
+    pub async fn start_auth(launcher: &LauncherConfig) -> Result<StandardDeviceAuthorizationResponse> {
         Ok(launcher.oauth2.exchange_device_code()
             .add_scope(Scope::new("XboxLive.signin".to_string()))
             .add_scope(Scope::new("offline_access".to_string()))
@@ -32,7 +33,7 @@ impl MicrosoftAccount {
 
     /// Begin with a creating of a [MicrosoftAccount]
     /// See: [Self::start_auth]
-    pub async fn login(launcher: &LauncherConfig, device_auth: &oauth2::StandardDeviceAuthorizationResponse) -> Result<Self> {
+    pub async fn login(launcher: &LauncherConfig, device_auth: &StandardDeviceAuthorizationResponse) -> Result<Self> {
         let dev_flow_res = launcher.oauth2.exchange_device_access_token(&device_auth)
             .request_async(&launcher.http_client, tokio::time::sleep, None).await?;
         let next = Self::next_steps(dev_flow_res.access_token().secret(), &launcher).await?;
@@ -152,8 +153,8 @@ impl AccountTrait for MicrosoftAccount {
         }.into())
     }
 
-    fn get_uuid(&self) -> Uuid {
-        self.uuid
+    fn get_uuid(&self) -> &Uuid {
+        &self.uuid
     }
 
     async fn prepare_launch(&self, _: &Path, _: &LauncherConfig) -> Result<()> {

@@ -10,7 +10,7 @@ use std::{ffi::OsString, fmt::Display, path::Path};
 use anyhow::Result;
 use enum_dispatch::enum_dispatch;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+pub use uuid::Uuid;
 
 use crate::{LauncherConfig, minecraft::login::{offline::OfflineAccount, yggdrasil::{AuthlibInjectorAccount, MinecraftUniversalLoginAccount, YggdrasilAccount}}};
 #[cfg(feature = "msa_auth")]
@@ -18,7 +18,7 @@ use crate::minecraft::login::microsoft::MicrosoftAccount;
 
 /// An account.
 #[enum_dispatch]
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(tag = "type")]
 pub enum Account {
     /// Offline account. Please take care of anti priate.
@@ -54,7 +54,7 @@ pub trait AccountTrait: Display + Sized {
     async fn check(self, launcher: &LauncherConfig) -> Result<Account>;
 
     /// Get the account UUID.
-    fn get_uuid(&self) -> Uuid;
+    fn get_uuid(&self) -> &Uuid;
 
     /// Prepare for launch.
     async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()>;

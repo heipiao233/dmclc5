@@ -18,7 +18,7 @@ pub use mul::MinecraftUniversalLoginAccount;
 
 
 /// Stored user data for a [YggdrasilAccount].
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct YggdrasilUserData {
     api_url: String,
     server_name: String,
@@ -29,10 +29,10 @@ pub struct YggdrasilUserData {
 }
 
 /// A Yggdrasil account profile, with dedicated game nickname, skin and cape.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct Profile {
-    id: Uuid,
-    name: String
+    pub id: Uuid,
+    pub name: String
 }
 
 #[derive(Deserialize, Serialize)]
@@ -46,19 +46,22 @@ struct AuthResponse {
 /// A kind of [Account] that Mojang uses before the migration. Used by some servers.
 /// With some mod (mostly based on Java Agent) they inject and modify the auth server to third party ones.
 /// This doesn't provide proof of purchase nowadays.
-#[derive(Serialize, Deserialize)]
-pub struct YggdrasilAccount<A: YggdrasilAccountTrait>(YggdrasilUserData, A);
+#[derive(Serialize, Deserialize, Clone)]
+pub struct YggdrasilAccount<A: YggdrasilAccountTrait> {
+    data: YggdrasilUserData,
+    extra: A
+}
 
 impl <A: YggdrasilAccountTrait> Display for YggdrasilAccount<A> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} ({})", self.0.name, self.0.server_name)
+        write!(f, "{} ({})", self.data.name, self.data.server_name)
     }
 }
 
 /// The interface of [YggdrasilAccount]
 #[enum_dispatch(YggdrasilAccount)]
 #[allow(async_fn_in_trait)]
-pub trait YggdrasilAccountTrait {
+pub trait YggdrasilAccountTrait: Clone {
     /// Prepare for launch.
     async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()>;
     /// Get additional JVM arguments.
@@ -68,7 +71,7 @@ pub trait YggdrasilAccountTrait {
 impl <A: YggdrasilAccountTrait> AccountTrait for YggdrasilAccount<A>
 where Account: From<Self> {
     async fn check(self, launcher: &LauncherConfig) -> Result<Account> {
-        let data = &self.0;
+        let data = &self.data;
         let req: Value = json!({
             "accessToken": data.at,
             "clientToken": data.client_token
@@ -82,27 +85,30 @@ where Account: From<Self> {
         let res: AuthResponse = launcher.http_client.post(format!("{}/authserver/refresh", data.api_url))
             .json(&req)
             .send().await?.json().await?;
-        Ok(Self(YggdrasilUserData {
-            at: res.access_token,
-            client_token: res.client_token,
-            ..self.0
-        }, self.1).into())
+        Ok(Self {
+            data: YggdrasilUserData {
+                at: res.access_token,
+                client_token: res.client_token,
+                ..self.data
+            },
+            extra: self.extra
+        }.into())
     }
 
-    fn get_uuid(&self) -> Uuid {
-        self.0.uuid
+    fn get_uuid(&self) -> &Uuid {
+        &self.data.uuid
     }
 
     async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()> {
-        self.1.prepare_launch(version_launch_dir, launcher).await
+        self.extra.prepare_launch(version_launch_dir, launcher).await
     }
 
     async fn get_launch_jvmargs(&self, launcher: &LauncherConfig) -> Result<Vec<OsString>> {
-        self.1.get_launch_jvmargs(&self.0, launcher).await
+        self.extra.get_launch_jvmargs(&self.data, launcher).await
     }
 
     fn replace_launch_game_arg(&self, arg: &str) -> String {
-        let data = &self.0;
+        let data = &self.data;
         arg.replace("${auth_access_token}", &data.at)
             .replace("${auth_session}", &data.at)
             .replace("${auth_player_name}", &data.name)
@@ -111,7 +117,7 @@ where Account: From<Self> {
     }
 
     fn get_log_masks(&self) -> Vec<String> {
-        vec![self.0.at.clone(), self.0.client_token.clone()]
+        vec![self.data.at.clone(), self.data.client_token.clone()]
     }
 }
 

@@ -16,7 +16,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
             *count += 1;
             println!("{count}");
         },
-        (_c, DownloadEvent::Progress(_prog)) => {
+        (_c, DownloadEvent::Chunk(_prog)) => {
             // println!("{} fetching: {prog}", c.0.display());
         },
         (c, DownloadEvent::Retry(_)) => {

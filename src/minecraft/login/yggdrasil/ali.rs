@@ -11,7 +11,7 @@ use crate::{LauncherConfig, minecraft::{login::yggdrasil::{Profile, YggdrasilAcc
 use super::YggdrasilUserData;
 
 /// An account with standard Yggdrasil, using [Authlib-Injector](https://github.com/yushijinhun/authlib-injector)
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct AuthlibInjectorAccount;
 
 impl YggdrasilAccountTrait for AuthlibInjectorAccount {
@@ -20,7 +20,7 @@ impl YggdrasilAccountTrait for AuthlibInjectorAccount {
         let release_info: Value = launcher.http_client
             .get("https://bmclapi2.bangbang93.com/mirrors/authlib-injector/artifact/latest.json")
             .send().await?.json().await?;
-        if check_hash::<Sha256>(&path, release_info["checksums"]["sha256"].as_str().ok_or(anyhow!("No sha256 in checksums."))?, 0) { // TODO: i18n
+        if check_hash::<Sha256>(&path, release_info["checksums"]["sha256"].as_str(), 0) { // TODO: i18n
             return Ok(());
         }
         download(release_info["download_url"].as_str().ok_or(anyhow!("Invaild download URL"))?, path).await?; // TODO: i18n
@@ -39,6 +39,9 @@ impl YggdrasilAccountTrait for AuthlibInjectorAccount {
 impl AuthlibInjectorAccount {
     /// Create a [AuthlibInjectorAccount] with authenicated tokens and selected profile from [yggdrasil::auth]
     pub fn new(auth_info: YggdrasilAuthInfo, profile: Profile) -> YggdrasilAccount<AuthlibInjectorAccount> {
-        YggdrasilAccount(YggdrasilUserData::new(auth_info, profile), Self)
+        YggdrasilAccount {
+            data: YggdrasilUserData::new(auth_info, profile),
+            extra: Self
+        }
     }
 }
