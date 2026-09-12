@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use versions::{Requirement, Versioning};
 use zip::ZipArchive;
 
-use crate::{components::mods::{ModsError, Result}, errors::LauncherError, utils::json_newline_transform};
+use crate::{components::mods::{ModsError, Result}, utils::json_newline_transform};
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 

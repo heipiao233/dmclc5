@@ -5,7 +5,7 @@ use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}, path::Path};
 use serde::Deserialize;
 use versions::Versioning;
 use zip::ZipArchive;
-use crate::{components::mods::{ModsError, Result}, utils::deserialize_maven_version_range};
+use crate::{components::mods::Result, utils::deserialize_maven_version_range};
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
@@ -89,7 +89,7 @@ struct JIJInfo {
     jars: Vec<JIJEntry>
 }
 
-fn get_impl_version<R: Read + Seek>(for_mod: &str, file: &mut ZipArchive<R>) -> Result<Option<String>> {
+fn get_impl_version<R: Read + Seek>(_for_mod: &str, file: &mut ZipArchive<R>) -> Result<Option<String>> {
     let mut manifest = file.by_name("META-INF/MANIFEST.MF")?;
     let mut manifest_content = String::new();
     manifest.read_to_string(&mut manifest_content)?;

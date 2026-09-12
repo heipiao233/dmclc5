@@ -11,7 +11,7 @@ use sha1::{Digest, Sha1};
 use tokio::fs::File;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::{LauncherConfig, errors::{LauncherError, Result}, minecraft::version::MinecraftInstallation};
+use crate::{LauncherConfig, errors::Result, minecraft::version::MinecraftInstallation};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 

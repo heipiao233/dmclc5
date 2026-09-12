@@ -2,10 +2,10 @@
 
 use std::{ffi::OsString, fmt::Display, path::Path};
 
-use oauth2::{ClientId, DeviceAuthorizationUrl, DeviceCodeErrorResponse, DeviceCodeErrorResponseType, EndpointNotSet, EndpointSet, HttpClientError, RefreshToken, Scope, StandardErrorResponse, TokenResponse, TokenUrl, basic::{BasicClient, BasicErrorResponseType}};
+use oauth2::{ClientId, DeviceAuthorizationUrl, DeviceCodeErrorResponseType, EndpointNotSet, EndpointSet, HttpClientError, RefreshToken, Scope, StandardErrorResponse, TokenResponse, TokenUrl, basic::{BasicClient, BasicErrorResponseType}};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::json;
 use uuid::Uuid;
 
 use crate::{LauncherConfig, minecraft::login::{Account, AccountTrait, AccountError}};

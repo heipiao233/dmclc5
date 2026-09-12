@@ -5,7 +5,7 @@ pub mod quilt;
 pub mod new_forgelike;
 pub mod old_forge;
 
-use std::{collections::HashMap, ffi::OsString, fmt::{Debug, Display, Write, format}, path::{Path, PathBuf}};
+use std::{collections::HashMap, ffi::OsString, fmt::{Debug, Display, Write}, path::{Path, PathBuf}};
 
 use enum_dispatch::enum_dispatch;
 use join_string::Join;

@@ -16,7 +16,7 @@ use serde::Deserializer;
 use versions::Requirement;
 
 #[cfg(feature="mod_loaders")]
-use crate::{components::mods::VersionBound, errors::Result};
+use crate::components::mods::VersionBound;
 use crate::minecraft::schemas::{Arguments, EnvRule, OSType, VersionJSON};
 
 #[cfg(not(target_os="windows"))]

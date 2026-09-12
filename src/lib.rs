@@ -5,12 +5,12 @@
 use std::path::{Path, PathBuf};
 
 #[cfg(feature="msa_auth")]
-use oauth2::{ClientId, DeviceAuthorizationUrl, EndpointNotSet, EndpointSet, TokenUrl, basic::BasicClient};
+use oauth2::{EndpointNotSet, EndpointSet, basic::BasicClient};
 use reqwest::Client;
 
 use crate::errors::Result;
 #[cfg(feature="msa_auth")]
-use crate::minecraft::login::{AccountError, microsoft::{MSAError, create_oauth2_client}};
+use crate::minecraft::login::{AccountError, microsoft::create_oauth2_client};
 
 #[macro_use]
 extern crate rust_i18n;
