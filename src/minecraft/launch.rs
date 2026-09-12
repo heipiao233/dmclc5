@@ -2,12 +2,11 @@
 
 use std::{ffi::{OsStr, OsString}, fs::File, iter::{self, once}, path::Path};
 
-use anyhow::{Ok, Result};
 use either::Either;
 use osstrtools_fix::{Bytes, OsStringTools};
 use tokio::sync::mpsc;
 
-use crate::{minecraft::login::AccountTrait, utils::{DownloadAllMessage, PATH_DELIMITER, check_rules, check_rules_no_option, get_bits, get_os}};
+use crate::{errors::Result, minecraft::login::AccountTrait, utils::{PATH_DELIMITER, check_rules, check_rules_no_option, download::DownloadAllMessage, get_bits, get_os}};
 
 use super::{login::Account, schemas::{Argument, Library, OneOrMoreArguments, VersionJSON}, version::MinecraftInstallation};
 

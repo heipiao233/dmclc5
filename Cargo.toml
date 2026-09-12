@@ -9,7 +9,6 @@ license = "GPL-3.0"
 repository = "https://github.com/heipiao233/dmclc5"
 
 [dependencies]
-anyhow = "1"
 base64 = "0.22"
 digest-io = "0.1.0"
 either = "1.16.0"
@@ -24,6 +23,7 @@ keyring = "4.1.2"
 markdown-it = { version = "0.6", optional = true }
 md5 = "0.8"
 murmur2 = { version = "0.1", optional = true }
+nom = { version = "8.0.0", optional = true }
 oauth2 = { version = "5.0.0", optional = true }
 open = { version = "5", optional = true }
 osstrtools-fix = "0.2.3"
@@ -36,6 +36,7 @@ serde_str = "0.1.0"
 sha1 = "0.11"
 sha2 = "0.11"
 tempfile = { version = "3", optional = true }
+thiserror = "2.0.20"
 tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "process", "io-std", "rt-multi-thread"] }
 tokio-util = { version = "0.7", features = ["compat"] }
 toml = { version = "1.0", optional = true }
@@ -46,7 +47,7 @@ zip = "8"
 
 [features]
 components_installation = ["dep:form_urlencoded", "dep:fs_extra", "dep:tempfile", "dep:xmltree"]
-mod_loaders = ["components_installation", "dep:toml", "dep:versions"]
+mod_loaders = ["components_installation", "dep:toml", "dep:versions", "dep:nom"]
 content_services = ["dep:futures", "dep:markdown-it", "dep:murmur2", "dep:serde_repr"]
 msa_auth = ["dep:open", "dep:oauth2"]
 

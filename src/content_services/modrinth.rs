@@ -2,7 +2,7 @@
 
 use std::{fmt::Debug, path::Path, sync::LazyLock};
 
-use anyhow::{anyhow, Error, Result};
+use futures::{StreamExt, TryStreamExt, stream};
 use futures_util::io::AllowStdIo;
 use markdown_it::MarkdownIt;
 use reqwest::StatusCode;
@@ -11,7 +11,7 @@ use sha1::{Digest, Sha1};
 use tokio::fs::File;
 use tokio_util::compat::TokioAsyncReadCompatExt;
 
-use crate::{minecraft::version::MinecraftInstallation, LauncherConfig};
+use crate::{LauncherConfig, errors::{LauncherError, Result}, minecraft::version::MinecraftInstallation};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 
@@ -407,13 +407,10 @@ impl ContentService for ModrinthContentService {
             ("limit", limit.to_string()),
             ("index", self.get_sort_fields()[sort_field].clone()),
         ]).send().await?.json().await?;
-        let res = futures::future::join_all(results.hits.iter().map(|v|ModrinthProject::from_id(&v.project_id, &launcher))).await;
-        let errors: Vec<&Error> = res.iter().filter(|v|v.is_err()).map(|v|v.as_ref().unwrap_err()).collect();
-        if !errors.is_empty() {
-            Err(anyhow!(errors.iter().map(|v|format!("{v} {}\n", v.root_cause())).collect::<String>()).into())
-        } else {
-            Ok(res.into_iter().map(|v|v.unwrap()).collect())
-        }
+        let res = stream::iter(results.hits)
+            .then(async |v|ModrinthProject::from_id(&v.project_id, &launcher).await)
+            .try_collect().await?;
+        Ok(res)
     }
 
     fn get_unsupported_content_types(&self) -> Vec<ContentType>  {

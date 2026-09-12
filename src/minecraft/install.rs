@@ -2,11 +2,10 @@
 
 use std::{fs::File, io::Read, path::PathBuf, slice::Iter, vec};
 
-use anyhow::{Ok, Result};
 use sha1::Sha1;
 use tokio::sync::mpsc;
 
-use crate::{LauncherConfig, minecraft::prefix::MinecraftPrefix, utils::{DownloadAllMessage, check_hash, check_rules, download_all, download_txt, get_os}};
+use crate::{LauncherConfig, errors::Result, minecraft::prefix::MinecraftPrefix, utils::{check_rules, download::{DownloadAllMessage, check_hash, download_all, download_txt}, get_os}};
 
 use super::{schemas::{AssetsIndex, Library, Resource, VersionJSON}, version::{DMCLCExtraData, MinecraftInstallation}};
 /// The version list of Minecraft.

@@ -66,6 +66,7 @@ impl ForgeLikeInstallerTrait for ForgeInstaller {
     }
 
     fn match_version(loader: &str, mc: &str) -> bool {
-        loader.starts_with(&(mc.to_owned() + "-"))
+        loader.strip_prefix(mc)
+            .is_some_and(|rest| rest.starts_with('-'))
     }
 }

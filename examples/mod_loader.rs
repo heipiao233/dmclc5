@@ -1,6 +1,6 @@
 use std::{path::PathBuf, str::FromStr};
 
-use dmclc5::{LauncherConfig, components::install::fabriclike::FABRIC_INSTALLER, minecraft::{prefix::MinecraftPrefix, schemas::VersionList}, utils::{DownloadAllMessage, DownloadEvent, download}};
+use dmclc5::{LauncherConfig, components::install::fabriclike::FABRIC_INSTALLER, minecraft::{prefix::MinecraftPrefix, schemas::VersionList}, utils::download::{DownloadAllMessage, DownloadEvent, download}};
 use tokio::sync::mpsc;
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -27,7 +27,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 #[tokio::main]
 async fn main() {
-    let config: LauncherConfig = LauncherConfig::new("dmclc example mod_loader".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")).unwrap();
+    let config: LauncherConfig = LauncherConfig::new("dmclc example mod_loader".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries"), "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()).unwrap();
     let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test")).unwrap();
     let (tx, mut rx) = mpsc::channel(1000);
     let handler = async move {

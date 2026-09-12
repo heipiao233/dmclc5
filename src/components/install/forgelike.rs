@@ -2,7 +2,6 @@
 
 use std::{collections::HashMap, ffi::OsString, io::Read, path::{Path, PathBuf}, process::Stdio};
 
-use anyhow::{anyhow, Result};
 use fs_extra::dir::CopyOptions;
 use futures::{StreamExt, TryStreamExt, stream};
 use osstrtools_fix::Bytes;
@@ -11,8 +10,8 @@ use sha1::Sha1;
 use tokio::{process::Command, sync::mpsc};
 
 #[cfg(feature = "mod_loaders")]
-use crate::components::mods::ModLoader;
-use crate::{LauncherConfig, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{DownloadAllMessage, PATH_DELIMITER, check_hash, download_all, download_res, download_to_writer, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
+use crate::components::mods::{ModLoader, ModsError};
+use crate::{LauncherConfig, components::install::{ComponentInstallerError, Result}, minecraft::{schemas::{Library, VersionJSON}, version::MinecraftInstallation}, utils::{PATH_DELIMITER, download::{DownloadAllMessage, check_hash, download_all, download_res, download_to_writer}, expand_maven_id, maven_coord::ArtifactCoordinate, merge_version_json}};
 
 use super::ComponentInstallerTrait;
 
@@ -92,18 +91,12 @@ pub struct ForgeLikeInstaller<T: ForgeLikeInstallerTrait>(pub(in crate::componen
 impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller<T> {
 
     #[cfg(feature = "mod_loaders")]
-    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>> {
+    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> std::result::Result<Vec<ModLoader>, ModsError> {
         Ok(T::get_mod_loaders(version, launcher))
     }
 
     async fn get_suitable_loader_versions(&self, mc: &MinecraftInstallation<'_>) -> Result<Vec<String>>  {
         let version = mc.extra_data.version.as_ref().unwrap().clone();
-        let mut version_split = version.split(".");
-        version_split.next();
-        let (major, minor): (u8, u8) = (version_split.next().unwrap().parse()?, version_split.next().unwrap_or("0").parse()?);
-        if major < 5 || (major == 5 && minor != 2) {
-            return Ok(vec![]);
-        }
         let res = reqwest::get(format!("{}/{}/maven-metadata.xml", T::MAVEN_GROUP_URL, T::get_archive_base_name(&version))).await?.text().await?;
         let val = xmltree::Element::parse(res.as_bytes())?;
         Ok(val.get_child("versioning").unwrap()
@@ -137,7 +130,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                 let mut res = mc.libraries(&metadata.libraries, false);
                 let target = &mc.obj;
                 let source: VersionJSON = serde_json::from_reader(std::fs::File::open(installer_dir.join("version.json"))?)?;
-                result = merge_version_json(target, &source)?;
+                result = merge_version_json(target, &source).map_err(|_| ComponentInstallerError::VersionJSONMergeError)?;
                 res.extend(mc.libraries(&source.get_base().libraries, false));
                 download_all(
                     res, download_channel,
@@ -158,7 +151,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                             )).await
                     })
                     .map(|p| (p, mc.config.get_libraries_path(p.jar.to_path())))
-                    .map(|(p, jar)| (stream::iter(p.classpath.iter().map(|i|mc.config.get_libraries_path(i.to_path()))
+                    .then(async |(p, jar)| (p.jar.clone(), stream::iter(p.classpath.iter().map(|i|mc.config.get_libraries_path(i.to_path()))
                         .chain(std::iter::once(jar.clone()))
                         .map(PathBuf::into_os_string)).enumerate()
                         .fold(OsString::new(), |mut acc, (idx, item)| async move {
@@ -167,22 +160,22 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                             }
                             acc.push(item);
                             acc
-                        }), jar))
-                    .then(async |(classpath, jar)|
-                        Ok::<_, anyhow::Error>(vec![
+                        }).await, jar))
+                    .map(|(name, classpath, jar)|
+                        (name, get_main_class(&jar).map(|main| vec![
                             OsString::from("-cp"),
-                            classpath.await,
-                            get_main_class(&jar)?
-                        ])
+                            classpath,
+                            main
+                        ]))
                     )
                     .then(async |args|
                         Command::new("java")
-                            .args(args?)
+                            .args(args.1?)
                             .stdout(Stdio::inherit())
                             .stderr(Stdio::inherit())
                             .stdin(Stdio::null())
                             .spawn()?
-                            .wait().await?.success().then(||()).ok_or(anyhow!(t!("A processor failed to run!")))
+                            .wait().await?.success().then(||()).ok_or(ComponentInstallerError::ProcessorFailureError(args.0.to_string()))
                     )
                     .try_collect::<()>().await?
             },
@@ -192,7 +185,7 @@ impl <T: ForgeLikeInstallerTrait> ComponentInstallerTrait for ForgeLikeInstaller
                 }
                 let target = &mc.obj;
                 let source: VersionJSON = metadata.version_info;
-                result = merge_version_json(target, &source)?;
+                result = merge_version_json(target, &source).map_err(|_| ComponentInstallerError::VersionJSONMergeError)?;
                 tokio::fs::copy(installer_dir.join(metadata.install.file_path), mc.config.get_libraries_path(metadata.install.path.to_path())).await?;
             }
         }
@@ -213,7 +206,7 @@ fn get_main_class(path: &Path) -> Result<OsString> {
     manifest.read_to_string(&mut manifest_content)?;
     let line = manifest_content.lines()
         .find(|l|l.starts_with("Main-Class:"))
-        .ok_or::<anyhow::Error>(anyhow!("No main class in processor jar!").into())? // TODO: i18n
+        .ok_or(ComponentInstallerError::ProcessorNotExecutableError)?
         .strip_prefix("Main-Class:").unwrap().trim();
     Ok(OsString::from(line))
 }

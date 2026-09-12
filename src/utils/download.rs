@@ -1,7 +1,7 @@
 /// Things about downloading.
 use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}, sync::Arc};
 
-use anyhow::Result;
+
 use futures_util::{io::AllowStdIo, TryStreamExt};
 
 use reqwest::IntoUrl;
@@ -9,7 +9,7 @@ use sha1::{Digest, Sha1, digest::Update};
 use tokio::{fs::{self, File}, io::{AsyncWrite, AsyncWriteExt}, sync::{Semaphore, mpsc::{self}}, task::JoinSet};
 use std::fs as sync_fs;
 
-use crate::minecraft::schemas::Resource;
+use crate::{minecraft::schemas::Resource};
 
 /// Check the hash of a file.
 ///
@@ -57,9 +57,9 @@ pub enum DownloadEvent {
     /// New chunk arrived with size
     Chunk(u64),
     /// File download retrying
-    Retry(anyhow::Error),
+    Retry(DownloadError),
     /// Download finished
-    Finish(anyhow::Result<()>),
+    Finish(Result<()>),
 }
 
 /// Messages for download_all in channel.
@@ -151,7 +151,7 @@ pub async fn download_to_writer_prog<URL: IntoUrl, W: AsyncWrite + std::marker::
     }
 
     let writer = resp.bytes_stream()
-        .map_err(|err|anyhow::Error::from(err))
+        .map_err(|err|DownloadError::from(err))
         .try_fold(writer, async |writer, bytes| {
             writer.write(&bytes).await?;
             cb(DownloadEvent::Chunk(bytes.len() as u64)).await;
@@ -181,3 +181,13 @@ pub async fn download_txt<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Res
     std::fs::write(path, &txt)?;
     Ok(txt)
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum DownloadError {
+    #[error("Network Error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
+}
+
+type Result<T> = std::result::Result<T, DownloadError>;

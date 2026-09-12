@@ -5,14 +5,13 @@ pub(crate) mod ali;
 
 use std::{ffi::OsString, fmt::Display, path::Path};
 
-use anyhow::{Result, anyhow};
 use enum_dispatch::enum_dispatch;
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::{LauncherConfig, minecraft::{login::{Account, AccountTrait}}};
+use crate::{LauncherConfig, minecraft::login::{Account, AccountError, AccountTrait, Result}};
 pub use ali::AuthlibInjectorAccount;
 pub use mul::MinecraftUniversalLoginAccount;
 
@@ -151,7 +150,7 @@ pub async fn auth(launcher: &LauncherConfig, api_url: String, username: String, 
         .json(&auth_req)
         .send().await?;
     if auth_res.status().is_client_error() {
-        return Err(anyhow!("Yggdrasil auth returned error code {}", auth_res.status())); // TODO: i18n
+        return Err(AccountError::YggdrasilError(auth_res.status()));
     }
     let auth_res: AuthResponse = auth_res.json().await?;
     Ok((YggdrasilAuthInfo {

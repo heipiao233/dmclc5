@@ -2,11 +2,10 @@
 
 use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}, path::Path};
 
-use anyhow::{anyhow, Result};
 use serde::Deserialize;
 use versions::Versioning;
 use zip::ZipArchive;
-use crate::utils::deserialize_maven_version_range;
+use crate::{components::mods::{ModsError, Result}, utils::deserialize_maven_version_range};
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
@@ -90,15 +89,15 @@ struct JIJInfo {
     jars: Vec<JIJEntry>
 }
 
-fn get_impl_version<R: Read + Seek>(file: &mut ZipArchive<R>) -> Result<String> {
+fn get_impl_version<R: Read + Seek>(for_mod: &str, file: &mut ZipArchive<R>) -> Result<Option<String>> {
     let mut manifest = file.by_name("META-INF/MANIFEST.MF")?;
     let mut manifest_content = String::new();
     manifest.read_to_string(&mut manifest_content)?;
     let line = manifest_content.lines()
-        .find(|l|l.starts_with("Implementation-Version:"))
-        .ok_or::<anyhow::Error>(anyhow!("No Implementation-Version in jar!").into())? // TODO: i18n
-        .strip_prefix("Implementation-Version:").unwrap().trim();
-    Ok(line.to_string())
+        .filter_map(|l|l.strip_prefix("Implementation-Version:"))
+        .map(ToString::to_string)
+        .next();
+    Ok(line)
 }
 
 impl NewerForgeLikeModLoader {
@@ -137,7 +136,8 @@ impl NewerForgeLikeModLoader {
                     if !impl_version.is_empty() {
                         version = impl_version.clone();
                     } else {
-                        version = get_impl_version(&mut archive)?;
+                        version = get_impl_version(&i.display_name.as_ref().unwrap_or(&i.mod_id), &mut archive)?
+                            .unwrap_or("${file.jarVersion}".to_string());
                         impl_version = version.clone();
                     }
                 }

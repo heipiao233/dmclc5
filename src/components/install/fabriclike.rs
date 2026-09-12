@@ -1,11 +1,11 @@
 //! Implementation of [ComponentInstaller] for Fabric-like installers.
 
-
-use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio::sync::mpsc;
 
-use crate::{LauncherConfig, components::{install::ComponentInstaller, mods::{ModLoader, ModLoaderTrait, fabric::FabricModLoader, quilt::QuiltModLoader}}, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::{DownloadAllMessage, download, download_all, maven_coord::ArtifactCoordinate, merge_version_json}};
+#[cfg(feature = "mod_loaders")]
+use crate::components::mods::ModsError;
+use crate::{LauncherConfig, components::{install::{ComponentInstaller, ComponentInstallerError, Result}, mods::{ModLoader, ModLoaderTrait, fabric::FabricModLoader, quilt::QuiltModLoader}}, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::{download::{DownloadAllMessage, download, download_all}, maven_coord::ArtifactCoordinate, merge_version_json}};
 
 use super::ComponentInstallerTrait;
 
@@ -19,7 +19,7 @@ pub trait FabricLikeInstallerTrait {
     #[cfg(feature = "mod_loaders")]
     #[allow(async_fn_in_trait)]
     /// Get the mod loaders the component provides.
-    async fn get_loader(version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>>;
+    async fn get_loader(version: &str, launcher: &LauncherConfig) -> std::result::Result<Vec<ModLoader>, ModsError>;
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -41,7 +41,8 @@ impl FabricLikeInstallerTrait for FabricInstaller {
     const META_URL: &'static str = "https://meta.fabricmc.net/v2";
     const LOADER_ARTIFACT_NAME: &'static str = "fabric-loader";
 
-    async fn get_loader(version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>> {
+    #[cfg(feature = "mod_loaders")]
+    async fn get_loader(version: &str, launcher: &LauncherConfig) -> std::result::Result<Vec<ModLoader>, ModsError> {
         let mut loader = FabricModLoader {
             builtin_mods: None
         };
@@ -64,7 +65,8 @@ impl FabricLikeInstallerTrait for QuiltInstaller {
     const META_URL: &'static str = "https://meta.quiltmc.org/v3";
     const LOADER_ARTIFACT_NAME: &'static str = "quilt-loader";
 
-    async fn get_loader(version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>> {
+    #[cfg(feature = "mod_loaders")]
+    async fn get_loader(version: &str, launcher: &LauncherConfig) -> std::result::Result<Vec<ModLoader>, ModsError> {
         let mut loader = QuiltModLoader {
             builtin_mods: None
         };
@@ -92,7 +94,7 @@ pub static QUILT_INSTALLER: ComponentInstaller = ComponentInstaller::Quilt(Fabri
 
 impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstaller<T> {
     #[cfg(feature = "mod_loaders")]
-    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>> {
+    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> std::result::Result<Vec<ModLoader>, ModsError> {
         T::get_loader(version, launcher).await
     }
 
@@ -111,7 +113,7 @@ impl <T: FabricLikeInstallerTrait> ComponentInstallerTrait for FabricLikeInstall
             form_urlencoded::byte_serialize(mcversion.as_bytes()).collect::<String>(),
             form_urlencoded::byte_serialize(version.as_bytes()).collect::<String>())
         ).await?.json().await?;
-        mc.obj = merge_version_json(&mc.obj, &version_info)?;
+        mc.obj = merge_version_json(&mc.obj, &version_info).map_err(|_| ComponentInstallerError::VersionJSONMergeError)?;
         serde_json::to_writer(&std::fs::File::create(mc.version_root.join(mc.name.to_string() + ".json"))?, &mc.obj)?;
         let res = mc.libraries(&version_info.get_base().libraries, true);
         download_all(res, download_channel,

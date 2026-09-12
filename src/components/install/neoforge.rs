@@ -70,10 +70,10 @@ impl ForgeLikeInstallerTrait for NeoForgeInstaller {
     fn match_version(loader: &str, mc: &str) -> bool {
         if mc == "1.20.1" {
             loader.starts_with("1.20.1-")
-        } else if mc.contains("-") || mc.contains("w") {
-            false
-        } else {
-            loader.starts_with(&mc.chars().skip(2).collect::<String>())
+        } else if mc.starts_with("1.") {
+            loader.starts_with(&mc[2..])
+        } else { // 26.1+
+            loader.starts_with(&mc)
         }
     }
 }

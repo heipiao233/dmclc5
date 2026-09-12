@@ -2,12 +2,12 @@
 
 use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}, path::Path};
 
-use anyhow::Result;
+
 use serde::{Deserialize, Serialize};
 use versions::Versioning;
 use zip::ZipArchive;
 
-use crate::utils::json_newline_transform;
+use crate::{components::mods::Result, utils::json_newline_transform};
 
 use super::{fabric::{fabric_parse_req, Icons}, DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 

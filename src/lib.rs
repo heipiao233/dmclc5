@@ -4,10 +4,13 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Ok, Result};
 #[cfg(feature="msa_auth")]
 use oauth2::{ClientId, DeviceAuthorizationUrl, EndpointNotSet, EndpointSet, TokenUrl, basic::BasicClient};
 use reqwest::Client;
+
+use crate::errors::Result;
+#[cfg(feature="msa_auth")]
+use crate::minecraft::login::{AccountError, microsoft::{MSAError, create_oauth2_client}};
 
 #[macro_use]
 extern crate rust_i18n;
@@ -17,6 +20,7 @@ pub mod content_services;
 pub mod minecraft;
 pub mod utils;
 pub mod components;
+pub mod errors;
 
 i18n!("locales");
 
@@ -55,9 +59,7 @@ impl LauncherConfig {
             http_client: Client::builder().user_agent(format!("{launcher_name}, based on heipiao233/dmclc5 (heipiao233@outlook.com)")).build()?,
             name: launcher_name,
             #[cfg(feature="msa_auth")]
-            oauth2: oauth2::basic::BasicClient::new(ClientId::new(ms_client_id))
-                .set_device_authorization_url(DeviceAuthorizationUrl::new("https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode".to_string())?)
-                .set_token_uri(TokenUrl::new("https://login.microsoftonline.com/consumers/oauth2/v2.0/token".to_string())?),
+            oauth2: create_oauth2_client(ms_client_id).map_err(|e|AccountError::from(e))?,
             download_retries: 5,
             download_parallel_files: 8,
             bmclapi_mirror: None

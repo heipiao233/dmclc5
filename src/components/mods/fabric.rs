@@ -2,12 +2,12 @@
 
 use std::{collections::HashMap, fs::File, io::{Cursor, Read, Seek}, path::Path};
 
-use anyhow::Result;
+
 use serde::{Deserialize, Serialize};
 use versions::{Requirement, Versioning};
 use zip::ZipArchive;
 
-use crate::utils::json_newline_transform;
+use crate::{components::mods::{ModsError, Result}, errors::LauncherError, utils::json_newline_transform};
 
 use super::{DepRequirement, ModInfo, ModLoaderTrait, VersionBound};
 
@@ -177,9 +177,9 @@ impl FabricModLoader {
                 .map(|jar_info| {
                     let mut jar_data = Vec::new();
                     archive.by_name(&jar_info.file)?.read_to_end(&mut jar_data)?;
-                    Ok::<_, anyhow::Error>(Cursor::new(jar_data))
+                    Ok::<_, ModsError>(Cursor::new(jar_data))
                 })
-                .try_for_each(|jar| Ok::<_, anyhow::Error>(stack.push(jar?)))?;
+                .try_for_each(|jar| Ok::<_, ModsError>(stack.push(jar?)))?;
         }
 
         Ok(res)

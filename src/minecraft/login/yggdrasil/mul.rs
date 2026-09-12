@@ -1,9 +1,9 @@
 use std::{ffi::OsString, path::Path};
 
-use anyhow::Result;
+
 use serde::{Deserialize, Serialize};
 
-use crate::{LauncherConfig, minecraft::{login::yggdrasil::{self, Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::download};
+use crate::{LauncherConfig, minecraft::login::{Result, yggdrasil::{self, Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::download::download};
 
 use super::YggdrasilUserData;
 

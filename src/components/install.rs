@@ -8,13 +8,12 @@ pub mod fabriclike;
 
 use std::str::FromStr;
 
-use anyhow::{anyhow, Result};
 use enum_dispatch::enum_dispatch;
 use tokio::sync::mpsc;
 
 #[cfg(feature = "mod_loaders")]
-use crate::components::mods::ModLoader;
-use crate::{LauncherConfig, components::install::{fabriclike::{FABRIC_INSTALLER, FabricInstaller, FabricLikeInstaller, QUILT_INSTALLER, QuiltInstaller}, forge::{FORGE_INSTALLER, ForgeInstaller}, forgelike::ForgeLikeInstaller, neoforge::{NEOFORGE_INSTALLER, NeoForgeInstaller}}, minecraft::{schemas::VersionJSON, version::{ComponentInfo, MinecraftInstallation}}, utils::DownloadAllMessage};
+use crate::components::mods::{ModLoader, ModsError};
+use crate::{LauncherConfig, components::install::{fabriclike::{FABRIC_INSTALLER, FabricInstaller, FabricLikeInstaller, QUILT_INSTALLER, QuiltInstaller}, forge::{FORGE_INSTALLER, ForgeInstaller}, forgelike::ForgeLikeInstaller, neoforge::{NEOFORGE_INSTALLER, NeoForgeInstaller}}, minecraft::{schemas::VersionJSON, version::{ComponentInfo, MinecraftInstallation}}, utils::download::DownloadAllMessage};
 
 /// The interface for [ComponentInstaller].
 #[allow(async_fn_in_trait)]
@@ -34,7 +33,7 @@ pub trait ComponentInstallerTrait {
     /// Get the mod loaders the component provides.
     /// For examples, the component quilt provides Quilt Loader and Fabric Loader, and the component OptiFine doesn't provide a mod loader;
     #[cfg(feature = "mod_loaders")]
-    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> Result<Vec<ModLoader>>;
+    async fn get_mod_loaders(&self, version: &str, launcher: &LauncherConfig) -> std::result::Result<Vec<ModLoader>, ModsError>;
 }
 
 /// A installer for a component.
@@ -80,11 +79,39 @@ impl FromStr for ComponentInstaller {
     }
 }
 
+#[derive(thiserror::Error, Debug)]
+pub enum ComponentInstallerError {
+    #[error("Zip File Error: {0}")]
+    ZipError(#[from] zip::result::ZipError),
+    #[error("Download Error: {0}")]
+    DownloadError(#[from] crate::utils::download::DownloadError),
+    #[error("JSON Serialize/Deserialize Error: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("XML Read Error: {0}")]
+    XmlError(#[from] xmltree::ParseError),
+    #[error("Network Error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
+    #[error("FS (extra) Error: {0}")]
+    FSExtError(#[from] fs_extra::error::Error),
+    #[error("Cannot merge `version.json`s.")]
+    VersionJSONMergeError,
+    #[error("A processor failed to run: {0}")]
+    ProcessorFailureError(String),
+    #[error("No main class in processor jar")]
+    ProcessorNotExecutableError,
+    #[error("Minecraft version unknown")]
+    MinecraftVersionUnknown,
+}
+
+pub type Result<T> = std::result::Result<T, ComponentInstallerError>;
+
 impl MinecraftInstallation<'_> {
     /// Install a component.
     pub async fn install_component(&mut self, component: ComponentInstaller, version: &str, download_channel: mpsc::Sender<DownloadAllMessage>) -> Result<()> {
         if let None = self.extra_data.version {
-            return Err(anyhow!(t!("loaders.minecraft_version_unknown")));
+            return Err(ComponentInstallerError::MinecraftVersionUnknown);
         }
         component.install(self, version, download_channel).await?;
         self.extra_data.components.push(ComponentInfo {

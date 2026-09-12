@@ -1,7 +1,7 @@
 use std::{path::PathBuf, process::Stdio};
 
-use anyhow::Result;
-use dmclc5::{LauncherConfig, minecraft::{login::{Account::self, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::{DownloadAllMessage, DownloadEvent}};
+
+use dmclc5::{LauncherConfig, errors::Result, minecraft::{login::{Account::self, offline::OfflineAccount}, prefix::MinecraftPrefix, schemas::VersionList}, utils::{DownloadAllMessage, DownloadEvent}};
 use tokio::{process::Command, sync::mpsc};
 
 async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
@@ -28,7 +28,7 @@ async fn handle_msg(msg: DownloadAllMessage, count: &mut usize) {
 
 async fn real_main() -> Result<()> {
     let vers = VersionList::get_list().await?;
-    let mut config = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries")/*, "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string()*/)?;
+    let mut config = LauncherConfig::new("Test".to_string(), PathBuf::from("./test/assets"), PathBuf::from("./test/libraries"), "71dd081b-dc92-4d36-81ac-3a2bde5527ba".to_string())?;
     config.bmclapi_mirror = Some("bmclapi2.bangbang93.com".into());
     let prefix: MinecraftPrefix = MinecraftPrefix::new(PathBuf::from("./test")).unwrap();
     let (tx, mut rx) = mpsc::channel(1000);

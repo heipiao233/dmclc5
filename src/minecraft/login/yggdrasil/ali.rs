@@ -1,12 +1,10 @@
 use std::{ffi::OsString, path::Path};
 
-use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sha2::Sha256;
 use base64::prelude::*;
 
-use crate::{LauncherConfig, minecraft::{login::yggdrasil::{Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::{check_hash, download}};
+use crate::{LauncherConfig, minecraft::login::{Result, yggdrasil::{Profile, YggdrasilAccount, YggdrasilAccountTrait, YggdrasilAuthInfo}}, utils::download::{check_hash, download}};
 
 use super::YggdrasilUserData;
 
@@ -14,16 +12,30 @@ use super::YggdrasilUserData;
 #[derive(Serialize, Deserialize, Clone)]
 pub struct AuthlibInjectorAccount;
 
+#[derive(Deserialize)]
+struct BMCLAPIAuthlibInjectorResponse {
+    build_number: usize,
+    version: String,
+    release_time: String,
+    download_url: String,
+    checksums: BMCLAPIAuthlibInjectorChecksums
+}
+
+#[derive(Deserialize)]
+struct BMCLAPIAuthlibInjectorChecksums {
+    sha256: String
+}
+
 impl YggdrasilAccountTrait for AuthlibInjectorAccount {
     async fn prepare_launch(&self, version_launch_dir: &Path, launcher: &LauncherConfig) -> Result<()> {
         let path = version_launch_dir.join("authlib-injector-latest.jar");
-        let release_info: Value = launcher.http_client
+        let release_info: BMCLAPIAuthlibInjectorResponse = launcher.http_client
             .get("https://bmclapi2.bangbang93.com/mirrors/authlib-injector/artifact/latest.json")
             .send().await?.json().await?;
-        if check_hash::<Sha256>(&path, release_info["checksums"]["sha256"].as_str(), 0) { // TODO: i18n
+        if check_hash::<Sha256>(&path, Some(&release_info.checksums.sha256), 0) {
             return Ok(());
         }
-        download(release_info["download_url"].as_str().ok_or(anyhow!("Invaild download URL"))?, path).await?; // TODO: i18n
+        download(release_info.download_url, path).await?;
         Ok(())
     }
 

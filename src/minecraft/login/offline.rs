@@ -3,11 +3,11 @@
 
 use std::{ffi::OsString, fmt::Display, path::Path};
 
-use anyhow::Result;
+
 use serde::{Deserialize, Serialize};
 use uuid::{Builder, Uuid};
 
-use crate::{LauncherConfig, minecraft::{login::{Account, AccountTrait}}};
+use crate::{LauncherConfig, minecraft::login::{Account, AccountTrait, Result}};
 
 
 /// An offline account, useful if no Internet.

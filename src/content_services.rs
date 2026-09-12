@@ -6,9 +6,9 @@ pub mod curseforge;
 
 use std::path::Path;
 
-use anyhow::Result;
 
-use crate::{LauncherConfig, future, minecraft::version::MinecraftInstallation};
+
+use crate::{LauncherConfig, errors::Result, future, minecraft::version::MinecraftInstallation};
 
 /// Type of contents.
 #[derive(PartialEq, Eq, Hash)]

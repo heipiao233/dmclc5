@@ -5,9 +5,8 @@ pub mod quilt;
 pub mod new_forgelike;
 pub mod old_forge;
 
-use std::{collections::HashMap, fmt::{Debug, Display, Write}, path::{Path, PathBuf}};
+use std::{collections::HashMap, ffi::OsString, fmt::{Debug, Display, Write, format}, path::{Path, PathBuf}};
 
-use anyhow::{anyhow, Result};
 use enum_dispatch::enum_dispatch;
 use join_string::Join;
 use std::fs;
@@ -18,23 +17,35 @@ use crate::{components::{install::ComponentInstallerTrait, mods::{fabric::Fabric
 /// A version requirement.
 /// If all the [versions::Requirement] matches, the [VersionBound] will match.
 #[derive(Clone, Debug)]
-pub struct VersionBound(pub Vec<versions::Requirement>);
+pub enum VersionBound {
+    None,
+    One(versions::Requirement),
+    Two(versions::Requirement, versions::Requirement)
+}
 
 impl VersionBound {
     /// Check if a [versions::Versioning] matches all the [versions::Requirement]s.
     pub fn matches(&self, version: &versions::Versioning) -> bool {
-        return self.0.iter().all(|v|v.matches(version));
+        return match self {
+            Self::None => true,
+            Self::One(req) => req.matches(version),
+            Self::Two(a, b) => a.matches(version) && b.matches(version),
+        };
     }
 
     /// Create a [VersionBound] with only one [versions::Requirement].
     pub fn new_one(req: versions::Requirement) -> Self {
-        Self(vec![req])
+        Self::One(req)
     }
 }
 
 impl ToString for VersionBound {
     fn to_string(&self) -> String {
-        self.0.iter().map(ToString::to_string).join(" ".to_string()).into_string()
+        match self {
+            Self::None => String::from("Any"),
+            Self::One(v) => v.to_string(),
+            Self::Two(a, b) => format!("{a} {b}")
+        }
     }
 }
 
@@ -101,48 +112,14 @@ pub struct ModInfo {
     pub breaks: Vec<DepRequirement>,
 }
 
-/// The level of a warning or error.
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-pub enum ModIssueLevel {
-    /// Error. The game will crash.
-    Hard,
-    /// Warning. It still works, but may not work fine.
-    Soft,
-    /// Suggestive. It works fine, but it would be better if the user solves it.
-    Suggestive
-}
-
 /// A dependency warning or error.
-pub struct ModIssue {
-    /// The level of this warning or error.
-    pub level: ModIssueLevel,
-    /// The message of this warning or error.
-    pub message: String
-}
-
-impl Display for ModIssue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_char('(')?;
-        self.level.fmt(f)?;
-        f.write_char(')')?;
-        f.write_str(&self.message)?;
-        Ok(())
-    }
-}
-
-impl Debug for ModIssue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("({:?}){}", self.level, self.message))
-    }
-}
-
-impl ModIssue {
-    fn new(level: ModIssueLevel, message: &str) -> Self {
-        Self {
-            level,
-            message: message.to_string()
-        }
-    }
+#[derive(Debug)]
+pub enum ModIssue {
+    DependsMissing(String, DepRequirement),
+    RecommendsMissing(String, DepRequirement),
+    SuggestsMissing(String, DepRequirement),
+    BreaksExist(String, DepRequirement),
+    ConflictsExist(String, DepRequirement),
 }
 
 /// The interface for [ModLoader].
@@ -206,29 +183,30 @@ fn check_mod_dependency(mods: &HashMap<String, ModInfo>, dependency: &DepRequire
 pub fn check_mod_dependencies(mods: &HashMap<String, ModInfo>) -> Vec<ModIssue> {
     let mut issues = Vec::new();
     for i in mods.values() {
+        let name = i.name.as_ref().unwrap_or(&i.id);
         for depend in &i.depends {
             if !check_mod_dependency(mods, depend, false) {
-                issues.push(ModIssue::new(ModIssueLevel::Hard, &t!("dependencies.dependency_unmet", source = i.name.as_ref().unwrap_or(&i.id), relation = t!("dependencies.relation.depends"), dependency = depend)))
+                issues.push(ModIssue::DependsMissing(name.clone(), depend.clone()));
             }
         }
         for depend in &i.recommends {
             if !check_mod_dependency(mods, depend, false) {
-                issues.push(ModIssue::new(ModIssueLevel::Soft, &t!("dependencies.dependency_unmet", source = i.name.as_ref().unwrap_or(&i.id), relation = t!("dependencies.relation.recommends"), dependency = depend)))
+                issues.push(ModIssue::RecommendsMissing(name.clone(), depend.clone()));
             }
         }
         for depend in &i.suggests {
             if !check_mod_dependency(mods, depend, false) {
-                issues.push(ModIssue::new(ModIssueLevel::Suggestive, &t!("dependencies.dependency_unmet", source = i.name.as_ref().unwrap_or(&i.id), relation = t!("dependencies.relation.suggests"), dependency = depend)))
+                issues.push(ModIssue::SuggestsMissing(name.clone(), depend.clone()));
             }
         }
         for depend in &i.conflicts {
             if !check_mod_dependency(mods, depend, true) {
-                issues.push(ModIssue::new(ModIssueLevel::Soft, &t!("dependencies.dependency_unmet", source = i.name.as_ref().unwrap_or(&i.id), relation = t!("dependencies.relation.conflicts"), dependency = depend)))
+                issues.push(ModIssue::ConflictsExist(name.clone(), depend.clone()));
             }
         }
         for depend in &i.breaks {
             if !check_mod_dependency(mods, depend, true) {
-                issues.push(ModIssue::new(ModIssueLevel::Hard, &t!("dependencies.dependency_unmet", source = i.name.as_ref().unwrap_or(&i.id), relation = t!("dependencies.relation.breaks"), dependency = depend)))
+                issues.push(ModIssue::BreaksExist(name.clone(), depend.clone()));
             }
         }
     }
@@ -268,11 +246,11 @@ impl MinecraftInstallation<'_> {
     ///
     /// # Returns
     /// A HashMap. The key is file name, and the value is a HashMap that contains all the mod IDs and [ModInfo]s in this file.
-    pub async fn list_mods(&self) -> Result<HashMap<String, HashMap<String, ModInfo>>> {
+    pub async fn list_mods(&self) -> Result<HashMap<OsString, HashMap<String, ModInfo>>> {
         if let None = self.extra_data.version {
-            return Err(anyhow!(t!("loaders.minecraft_version_unknown")));
+            return Err(ModsError::MinecraftVersionUnknown);
         }
-        let mut mods: HashMap<String, HashMap<String, ModInfo>> = HashMap::new();
+        let mut mods: HashMap<OsString, HashMap<String, ModInfo>> = HashMap::new();
         let moddir: PathBuf = Path::join(&self.version_launch_work_dir, "mods");
         let mut loaders = vec![];
         for i in &self.extra_data.components {
@@ -288,9 +266,31 @@ impl MinecraftInstallation<'_> {
                         mods_in_file.insert(info.id.clone(), info);
                     }
                 }
-                mods.insert(file.file_name().into_string().map_err(|v|anyhow!("Can't decode {v:?}"))?, mods_in_file);
+                mods.insert(file.file_name(), mods_in_file);
             }
         }
         Ok(mods)
     }
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum ModsError {
+    #[error("Download Error: {0}")]
+    DownloadError(#[from] crate::utils::download::DownloadError),
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
+    #[error("Zip File Error: {0}")]
+    ZipError(#[from] zip::result::ZipError),
+    #[error("JSON Serialize/Deserialize Error: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("TOML Read Error: {0}")]
+    TomlError(#[from] toml::de::Error),
+    #[error("Maven version bound parse error: {0}")]
+    MavenVersionBoundError(String),
+    #[error("Mod {0} specified version as jar version, but there is no Implementation-Version in the jar")]
+    JarVersionMissingError(String),
+    #[error("Minecraft version unknown")]
+    MinecraftVersionUnknown,
+}
+
+pub type Result<T> = std::result::Result<T, ModsError>;

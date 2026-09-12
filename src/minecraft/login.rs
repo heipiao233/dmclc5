@@ -7,8 +7,9 @@ pub mod offline;
 
 use std::{ffi::OsString, fmt::Display, path::Path};
 
-use anyhow::Result;
+
 use enum_dispatch::enum_dispatch;
+use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 pub use uuid::Uuid;
 
@@ -66,3 +67,20 @@ pub trait AccountTrait: Display + Sized {
     /// If these strings appears in the log, the launcher should replace them with *** or other masks.
     fn get_log_masks(&self) -> Vec<String>;
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum AccountError {
+    #[error("Network Error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("JSON Serialize/Deserialize Error: {0}")]
+    JsonError(#[from] serde_json::Error),
+    #[error("Download Error: {0}")]
+    DownloadError(#[from] crate::utils::download::DownloadError),
+    #[error("Yggdrasil login error with status code: {0}")]
+    YggdrasilError(StatusCode),
+    #[cfg(feature = "msa_auth")]
+    #[error("MSA Auth Error: {0}")]
+    MSAError(#[from] crate::minecraft::login::microsoft::MSAError)
+}
+
+type Result<T> = std::result::Result<T, AccountError>;

@@ -1,24 +1,23 @@
 //! Some utilities.
 
-mod download;
+pub mod download;
 pub mod maven_coord;
 
 use std::ffi::{OsStr, OsString};
 
-use anyhow::{anyhow, Result};
 use maven_coord::ArtifactCoordinate;
+#[cfg(feature="mod_loaders")]
+use nom::{IResult, Parser, branch::alt, multi::many1, character::streaming::char, combinator::map};
 #[cfg(feature="mod_loaders")]
 use serde::de::Visitor;
 #[cfg(feature="mod_loaders")]
 use serde::Deserializer;
 #[cfg(feature="mod_loaders")]
-use versions::{Requirement, Versioning};
+use versions::Requirement;
 
 #[cfg(feature="mod_loaders")]
-use crate::components::mods::VersionBound;
+use crate::{components::mods::VersionBound, errors::Result};
 use crate::minecraft::schemas::{Arguments, EnvRule, OSType, VersionJSON};
-
-pub use self::download::{download, download_res, download_txt, download_all, check_hash, download_to_writer, DownloadAllMessage, DownloadEvent};
 
 #[cfg(not(target_os="windows"))]
 /// The path delimiter.
@@ -88,36 +87,31 @@ where OsString: From<A> {
 }
 
 /// Merge two [VersionJSON]s with the same version.
-pub fn merge_version_json(a: &VersionJSON, b: &VersionJSON) -> Result<VersionJSON> {
+pub fn merge_version_json(a: &VersionJSON, b: &VersionJSON) -> std::result::Result<VersionJSON, ()> {
     let mut c = a.get_base().clone();
     c.libraries = b.get_base().libraries.clone().into_iter().chain(c.libraries).collect();
     c.main_class = b.get_base().main_class.clone();
-    match a {
-        VersionJSON::Old { base: _, minecraft_arguments: _ } => {
-            if let VersionJSON::Old {base: _, minecraft_arguments} = b {
-                return Ok(VersionJSON::Old { base: c, minecraft_arguments: minecraft_arguments.to_string() });
-            }
-            Result::Err(anyhow!("try to merge different kinds of version json!")) // TODO: i18n
+    match (a, b) {
+        (VersionJSON::Old { base: _, minecraft_arguments: _ }, VersionJSON::Old {base: _, minecraft_arguments}) => {
+            Ok(VersionJSON::Old { base: c, minecraft_arguments: minecraft_arguments.to_string() })
         },
-        VersionJSON::New { base: _, arguments: arguments_a } => {
-            if let VersionJSON::New {base: _, arguments: arguments_b} = b {
-                let mut new_game = arguments_a.game.clone();
-                if let Some(b_game) = arguments_b.game.clone() && let Some(new_game) = &mut new_game {
-                    new_game.extend(b_game);
-                } else {
-                    new_game = arguments_b.game.clone();
-                }
+        (VersionJSON::New { base: _, arguments: arguments_a }, VersionJSON::New {base: _, arguments: arguments_b}) => {
+            let mut new_game = arguments_a.game.clone();
+            if let Some(b_game) = arguments_b.game.clone() && let Some(new_game) = &mut new_game {
+                new_game.extend(b_game);
+            } else {
+                new_game = arguments_b.game.clone();
+            }
 
-                let mut new_jvm = arguments_a.jvm.clone();
-                if let Some(b_jvm) = arguments_b.jvm.clone() && let Some(new_jvm) = &mut new_jvm {
-                    new_jvm.extend(b_jvm);
-                } else {
-                    new_jvm = arguments_b.jvm.clone();
-                }
-                return Ok(VersionJSON::New { base: c, arguments: Arguments { game: new_game, jvm: new_jvm } });
+            let mut new_jvm = arguments_a.jvm.clone();
+            if let Some(b_jvm) = arguments_b.jvm.clone() && let Some(new_jvm) = &mut new_jvm {
+                new_jvm.extend(b_jvm);
+            } else {
+                new_jvm = arguments_b.jvm.clone();
             }
-            Result::Err(anyhow!("try to merge different kinds of version json!")) // TODO: i18n
+            return Ok(VersionJSON::New { base: c, arguments: Arguments { game: new_game, jvm: new_jvm } });
         },
+        _ => Err(())
     }
 }
 
@@ -126,70 +120,56 @@ pub fn expand_maven_id(id: &str) -> String {
     ArtifactCoordinate::from(id).to_path()
 }
 
-// or
+#[cfg(feature="mod_loaders")]
+fn parse_maven_version_bound(v: &str) -> IResult<&str, VersionBound> {
+    let (v, (left, _, right)) = (
+        alt((
+            map((char('['), versions::Versioning::parse), |(_, v)| Some(versions::Requirement {
+                op: versions::Op::GreaterEq,
+                version: Some(v)
+            })),
+            map((char('('), versions::Versioning::parse), |(_, v)| Some(versions::Requirement {
+                op: versions::Op::Greater,
+                version: Some(v)
+            })),
+            map(char('('), |_|{None}),
+        )),
+        char(','),
+        alt((
+            map((versions::Versioning::parse, char(']')), |(v, _)| Some(versions::Requirement {
+                op: versions::Op::LessEq,
+                version: Some(v)
+            })),
+            map((versions::Versioning::parse, char(')')), |(v, _)| Some(versions::Requirement {
+                op: versions::Op::Less,
+                version: Some(v)
+            })),
+            map(char(')'), |_|{None}),
+        )),
+    ).parse(v)?;
+    Ok((v, match (left, right) {
+        (Some(l), Some(r)) => VersionBound::Two(l, r),
+        (Some(l), None) => VersionBound::One(l),
+        (None, Some(r)) => VersionBound::One(r),
+        (None, None) => VersionBound::None,
+    }))
+}
 
 #[cfg(feature="mod_loaders")]
 /// Parse a [Maven version range](https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html).
-pub fn parse_maven_version_range(v: &str) -> anyhow::Result<Vec<VersionBound>> {
-    let error = anyhow!(format!("{v} isn't a vaild Maven version range!")); // TODO: i18n
-    if !v.contains(",") {
-        if v.starts_with("[") && v.ends_with("]") {
-            let version = &v[1..v.len() - 1];
-            return Ok(vec![VersionBound::new_one(Requirement {
-                op: versions::Op::Exact,
-                version: Some(Versioning::parse(version).map_err(|_|error)?.1)
-            })]);
-        }
-        return Ok(vec![VersionBound::new_one(Requirement {
+pub fn parse_maven_version_range(v: &str) -> IResult<&str, Vec<VersionBound>> {
+    alt((nom::combinator::map(versions::Versioning::parse, |v| vec![VersionBound::new_one(Requirement {
             op: versions::Op::GreaterEq,
-            version: Some(Versioning::parse(v).map_err(|_|error)?.1)
-        })]);
-    }
-    let mut splited = v.split(",");
-    let mut ret = vec![];
-    loop {
-        let Some(upper) = splited.next() else {
-            break
-        };
-        let Some(lower) = splited.next() else {
-            break
-        };
-        let mut bounds = vec![];
-        if lower != "(" && lower.starts_with("(") {
-            bounds.push(Requirement {
-                op: versions::Op::Greater,
-                version: Versioning::new(&lower[1..])
-            });
-        } else if lower.starts_with("[") {
-            bounds.push(Requirement {
-                op: versions::Op::GreaterEq,
-                version: Versioning::new(&lower[1..])
-            });
-        } else if lower != "(" {
-            return Err(error);
-        }
-        if upper != ")" && lower.ends_with(")") {
-            bounds.push(Requirement {
-                op: versions::Op::Greater,
-                version: Versioning::new(&upper[..upper.len() - 1])
-            });
-        }
-        if lower.ends_with("]") {
-            bounds.push(Requirement {
-                op: versions::Op::GreaterEq,
-                version: Versioning::new(&upper[..upper.len() - 1])
-            });
-        } else if upper != ")" {
-            return Err(error.into());
-        }
-        ret.push(VersionBound(bounds))
-    }
-    Ok(ret)
+            version: Some(v)
+        })]),
+        many1(parse_maven_version_bound)
+    ))
+        .parse(v)
 }
 
 #[cfg(feature="mod_loaders")]
 /// Deserialize a [Maven version range](https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html).
-pub fn deserialize_maven_version_range<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<VersionBound>, D::Error> {
+pub fn deserialize_maven_version_range<'de, D: Deserializer<'de>>(deserializer: D) -> std::result::Result<Vec<VersionBound>, D::Error> {
     struct StructVisitor;
     impl <'de> Visitor<'de> for StructVisitor {
         type Value = Vec<VersionBound>;
@@ -201,7 +181,9 @@ pub fn deserialize_maven_version_range<'de, D: Deserializer<'de>>(deserializer: 
         fn visit_str<E>(self, v: &str) -> std::result::Result<Self::Value, E>
             where
                 E: serde::de::Error {
-            parse_maven_version_range(v).map_err(|_|serde::de::Error::invalid_value(serde::de::Unexpected::Str(v), &"A Maven Version Range"))
+            parse_maven_version_range(v)
+                .map_err(|_| serde::de::Error::invalid_value(serde::de::Unexpected::Str(v), &"A Maven Version Range"))
+                .map(|(_, v)| v)
         }
     }
     deserializer.deserialize_str(StructVisitor)

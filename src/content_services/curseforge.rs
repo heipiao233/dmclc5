@@ -2,7 +2,7 @@
 
 use std::{fmt::Debug, path::Path};
 
-use anyhow::Result;
+
 use futures::{StreamExt, TryStreamExt, stream};
 use murmur2::murmur2;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 
 #[cfg(feature="mod_loaders")]
 use crate::components::install::ComponentInstaller;
-use crate::{minecraft::version::MinecraftInstallation, LauncherConfig};
+use crate::{LauncherConfig, errors::{LauncherError, Result}, minecraft::version::MinecraftInstallation};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 #[cfg(feature="mod_loaders")]
@@ -324,7 +324,7 @@ impl ContentVersion for CurseforgeModFile {
         stream::iter(&self.dependencies)
             .filter(|i| async { RelationType::RequiredDependency == i.relation_type })
             .then(|i| async {
-                Ok::<_, anyhow::Error>(ContentDependency::Content(
+                Ok::<_, LauncherError>(ContentDependency::Content(
                     CurseforgeMod::from_id(&i.mod_id.to_string(), &launcher).await?
                 ))
             })

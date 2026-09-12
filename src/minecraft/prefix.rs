@@ -2,9 +2,9 @@
 
 use std::{fs, path::{Path, PathBuf}};
 
-use anyhow::Result;
 
-use crate::{LauncherConfig, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::merge_version_json};
+
+use crate::{LauncherConfig, errors::Result, minecraft::{schemas::VersionJSON, version::MinecraftInstallation}, utils::merge_version_json};
 
 /// A game prefix, typically .minecraft
 pub struct MinecraftPrefix {
@@ -59,7 +59,7 @@ impl MinecraftPrefix {
             if father.is_err() {
                 return current;
             }
-            current = if let Result::Ok(current) = merge_version_json(&father.unwrap(), &current) {
+            current = if let Ok(current) = merge_version_json(&father.unwrap(), &current) {
                 current
             } else {
                 return current;
