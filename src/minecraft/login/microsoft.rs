@@ -21,18 +21,25 @@ pub struct MicrosoftAccount {
     at: String
 }
 
+/// An error about Microsoft accounts.
 #[derive(Debug, thiserror::Error)]
 pub enum MSAError {
+    /// OAuth error.
     #[error("OAuth Basic Error: {0}")]
     OAuthBasicError(#[from] oauth2::RequestTokenError<HttpClientError<reqwest::Error>, StandardErrorResponse<BasicErrorResponseType>>),
+    /// OAuth error when using device flow.
     #[error("OAuth Device Flow Error: {0}")]
     OAuthDeviceError(#[from] oauth2::RequestTokenError<HttpClientError<reqwest::Error>, StandardErrorResponse<DeviceCodeErrorResponseType>>),
+    /// Error when parsing an URL.
     #[error("OAuth URL Parse Error: {0}")]
     OAuthUrlParseError(#[from] oauth2::url::ParseError),
+    /// Failure when reading/writting OS keyrings.
     #[error("Keyring Error: {0}")]
     KeyringError(#[from] keyring::Error),
+    /// Network error.
     #[error("Network Error: {0}")]
     ReqwestError(#[from] reqwest::Error),
+    /// The player didn't purcase the game, and therefore cannot login.
     #[error("The player didn't purcase the game.")]
     GameNotPurcased
 }

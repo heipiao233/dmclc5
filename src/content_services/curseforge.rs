@@ -12,7 +12,7 @@ use tokio::{fs::File, io::AsyncReadExt};
 
 #[cfg(feature="mod_loaders")]
 use crate::components::install::ComponentInstaller;
-use crate::{LauncherConfig, errors::{LauncherError, Result}, minecraft::version::MinecraftInstallation};
+use crate::{LauncherConfig, content_services::{ContentServiceError, Result}, minecraft::version::MinecraftInstallation};
 
 use super::{Content, ContentDependency, ContentService, ContentType, ContentVersion, Screenshot};
 #[cfg(feature="mod_loaders")]
@@ -324,7 +324,7 @@ impl ContentVersion for CurseforgeModFile {
         stream::iter(&self.dependencies)
             .filter(|i| async { RelationType::RequiredDependency == i.relation_type })
             .then(|i| async {
-                Ok::<_, LauncherError>(ContentDependency::Content(
+                Ok::<_, ContentServiceError>(ContentDependency::Content(
                     CurseforgeMod::from_id(&i.mod_id.to_string(), &launcher).await?
                 ))
             })

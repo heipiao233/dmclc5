@@ -79,33 +79,45 @@ impl FromStr for ComponentInstaller {
     }
 }
 
+/// Errors from component installers.
 #[derive(thiserror::Error, Debug)]
 pub enum ComponentInstallerError {
+    /// Failure when reading a ZIP file.
     #[error("Zip File Error: {0}")]
     ZipError(#[from] zip::result::ZipError),
+    /// Failure when downloading.
     #[error("Download Error: {0}")]
     DownloadError(#[from] crate::utils::download::DownloadError),
+    /// Failure when (de)serializing JSON.
     #[error("JSON Serialize/Deserialize Error: {0}")]
     JsonError(#[from] serde_json::Error),
+    /// Failure when deserializing XML.
     #[error("XML Read Error: {0}")]
     XmlError(#[from] xmltree::ParseError),
+    /// Network error.
     #[error("Network Error: {0}")]
     ReqwestError(#[from] reqwest::Error),
+    /// IO error.
     #[error("IO Error: {0}")]
     IOError(#[from] std::io::Error),
+    /// FS error from [fs_extra]
     #[error("FS (extra) Error: {0}")]
     FSExtError(#[from] fs_extra::error::Error),
+    /// Two different kinds of `version.json` are asked to be merged.
     #[error("Cannot merge `version.json`s.")]
     VersionJSONMergeError,
+    /// A Forge installer processor fails.
     #[error("A processor failed to run: {0}")]
     ProcessorFailureError(String),
+    /// A Forge installer processor has no main class.
     #[error("No main class in processor jar")]
     ProcessorNotExecutableError,
+    /// Minecraft version is unknown.
     #[error("Minecraft version unknown")]
     MinecraftVersionUnknown,
 }
 
-pub type Result<T> = std::result::Result<T, ComponentInstallerError>;
+pub(self) type Result<T> = std::result::Result<T, ComponentInstallerError>;
 
 impl MinecraftInstallation<'_> {
     /// Install a component.

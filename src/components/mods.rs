@@ -18,8 +18,11 @@ use crate::{components::{install::ComponentInstallerTrait, mods::{fabric::Fabric
 /// If all the [versions::Requirement] matches, the [VersionBound] will match.
 #[derive(Clone, Debug)]
 pub enum VersionBound {
+    /// Any version is accepted.
     None,
+    /// Only one bound.
     One(versions::Requirement),
+    /// Two bounds are needed to be satisified.
     Two(versions::Requirement, versions::Requirement)
 }
 
@@ -113,12 +116,23 @@ pub struct ModInfo {
 }
 
 /// A dependency warning or error.
+/// Documents from [https://wiki.fabricmc.net/documentation:fabric_mod_json#dependency_resolution].
 #[derive(Debug)]
 pub enum ModIssue {
+    /// For dependencies required to run.
+    /// If any are missing, it will trigger a crash.
     DependsMissing(String, DepRequirement),
+    /// For dependencies not required to run.
+    /// For each missing dependency, it will log a warning.
     RecommendsMissing(String, DepRequirement),
+    /// For dependencies not required to run.
+    /// Use this as a kind of metadata.
     SuggestsMissing(String, DepRequirement),
+    /// For mods whose together with yours might cause a game crash.
+    /// If any are present, it will trigger a crash.
     BreaksExist(String, DepRequirement),
+    /// For mods whose together with yours cause some kind of bugs, etc.
+    /// For each conflicting mod present, it will log a warning.
     ConflictsExist(String, DepRequirement),
 }
 
@@ -273,24 +287,33 @@ impl MinecraftInstallation<'_> {
     }
 }
 
+/// Errors about mod checking.
 #[derive(thiserror::Error, Debug)]
 pub enum ModsError {
+    /// Failure when downloading.
     #[error("Download Error: {0}")]
     DownloadError(#[from] crate::utils::download::DownloadError),
+    /// IO error.
     #[error("IO Error: {0}")]
     IOError(#[from] std::io::Error),
+    /// Failure when reading a ZIP file.
     #[error("Zip File Error: {0}")]
     ZipError(#[from] zip::result::ZipError),
+    /// Failure when (de)serializing JSON.
     #[error("JSON Serialize/Deserialize Error: {0}")]
     JsonError(#[from] serde_json::Error),
+    /// Failure when deserializing TOML.
     #[error("TOML Read Error: {0}")]
     TomlError(#[from] toml::de::Error),
+    /// Failure when parsing a [Maven version bound](https://maven.apache.org/enforcer/enforcer-rules/versionRanges.html)
     #[error("Maven version bound parse error: {0}")]
     MavenVersionBoundError(String),
+    /// ${file.jarVersion} is used in a mod version but the jar doesn't specify that.
     #[error("Mod {0} specified version as jar version, but there is no Implementation-Version in the jar")]
     JarVersionMissingError(String),
+    /// Minecraft version is unknown.
     #[error("Minecraft version unknown")]
     MinecraftVersionUnknown,
 }
 
-pub type Result<T> = std::result::Result<T, ModsError>;
+pub(self) type Result<T> = std::result::Result<T, ModsError>;

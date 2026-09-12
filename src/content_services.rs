@@ -8,7 +8,7 @@ use std::path::Path;
 
 
 
-use crate::{LauncherConfig, errors::Result, future, minecraft::version::MinecraftInstallation};
+use crate::{LauncherConfig, future, minecraft::version::MinecraftInstallation};
 
 /// Type of contents.
 #[derive(PartialEq, Eq, Hash)]
@@ -116,3 +116,22 @@ pub trait ContentService {
     /// Get a [ContentVersion] by ID.
     fn get_content_version_by_id(&self, content_id: &str, id: &str, launcher: &LauncherConfig) -> future!(Result<Option<<Self::C as Content>::V>>);
 }
+
+/// An error about content services.
+#[derive(thiserror::Error, Debug)]
+pub enum ContentServiceError {
+    /// Network error.
+    #[error("Network Error: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    /// Failure when (de)serializing JSON.
+    #[error("JSON Serialize/Deserialize Error: {0}")]
+    JsonError(#[from] serde_json::Error),
+    /// Failure when downloading.
+    #[error("Download Error: {0}")]
+    DownloadError(#[from] crate::utils::download::DownloadError),
+    /// IO error.
+    #[error("IO Error: {0}")]
+    IOError(#[from] std::io::Error),
+}
+
+pub(self) type Result<T> = std::result::Result<T, ContentServiceError>;

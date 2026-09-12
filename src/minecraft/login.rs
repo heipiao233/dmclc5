@@ -68,17 +68,23 @@ pub trait AccountTrait: Display + Sized {
     fn get_log_masks(&self) -> Vec<String>;
 }
 
+/// An error about accounts.
 #[derive(thiserror::Error, Debug)]
 pub enum AccountError {
+    /// Network error.
     #[error("Network Error: {0}")]
     ReqwestError(#[from] reqwest::Error),
+    /// Failure when (de)serializing JSON.
     #[error("JSON Serialize/Deserialize Error: {0}")]
     JsonError(#[from] serde_json::Error),
+    /// Failure when downloading.
     #[error("Download Error: {0}")]
     DownloadError(#[from] crate::utils::download::DownloadError),
+    /// An error about Yggdrasil accounts.
     #[error("Yggdrasil login error with status code: {0}")]
     YggdrasilError(StatusCode),
     #[cfg(feature = "msa_auth")]
+    /// An error about Microsoft accounts.
     #[error("MSA Auth Error: {0}")]
     MSAError(#[from] crate::minecraft::login::microsoft::MSAError)
 }

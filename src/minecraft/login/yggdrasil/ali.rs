@@ -14,9 +14,6 @@ pub struct AuthlibInjectorAccount;
 
 #[derive(Deserialize)]
 struct BMCLAPIAuthlibInjectorResponse {
-    build_number: usize,
-    version: String,
-    release_time: String,
     download_url: String,
     checksums: BMCLAPIAuthlibInjectorChecksums
 }

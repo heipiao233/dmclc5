@@ -1,4 +1,4 @@
-/// Things about downloading.
+//! Things about downloading.
 use std::{os::unix::fs::MetadataExt, path::{Path, PathBuf}, sync::Arc};
 
 
@@ -182,10 +182,13 @@ pub async fn download_txt<URL: IntoUrl>(url: URL, path: impl AsRef<Path>) -> Res
     Ok(txt)
 }
 
+/// Errors when downloading.
 #[derive(thiserror::Error, Debug)]
 pub enum DownloadError {
+    /// Network error.
     #[error("Network Error: {0}")]
     ReqwestError(#[from] reqwest::Error),
+    /// IO error.
     #[error("IO Error: {0}")]
     IOError(#[from] std::io::Error),
 }
